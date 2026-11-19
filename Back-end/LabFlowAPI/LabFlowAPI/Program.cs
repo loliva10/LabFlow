@@ -12,34 +12,28 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
-
 var builder = WebApplication.CreateBuilder(args);
-
-// ---------- Inteligência Artificial ----------
 
 builder.Services.AddHttpClient<LlamaService>(client =>
 {
-	var ollamaUrl = builder.Configuration["IA:Ollama:BaseUrl"]
-		?? "http://localhost:11434/";
+    var ollamaUrl = builder.Configuration["IA:Ollama:BaseUrl"]
+        ?? "http://localhost:11434/";
 
-	client.BaseAddress = new Uri(ollamaUrl);
-	client.Timeout = TimeSpan.FromMinutes(3);
+    client.BaseAddress = new Uri(ollamaUrl);
+    client.Timeout = TimeSpan.FromMinutes(3);
 });
 
 builder.Services.AddHttpClient<GroqService>(client =>
 {
-	var groqUrl = builder.Configuration["IA:Groq:BaseUrl"]
-		?? "https://api.groq.com/openai/v1/";
+    var groqUrl = builder.Configuration["IA:Groq:BaseUrl"]
+        ?? "https://api.groq.com/openai/v1/";
 
-	client.BaseAddress = new Uri(groqUrl);
-	client.Timeout = TimeSpan.FromMinutes(3);
-}); 
+    client.BaseAddress = new Uri(groqUrl);
+    client.Timeout = TimeSpan.FromMinutes(3);
+});
 
 builder.Services.AddScoped<ILanguageModelService, LhamaIAChatService>();
 
-// ---------- LHAMA IA: extração estruturada de documentos ----------
-// Um único HttpClient atende os dois provedores (Groq e Ollama falam OpenAI-compatible);
-// a URL de cada um vem do appsettings, então a ordem de fallback é configuração, não código.
 builder.Services.AddHttpClient<ILhamaIa, LhamaIaService>(client =>
 {
     client.Timeout = TimeSpan.FromMinutes(3);
@@ -49,21 +43,17 @@ builder.Services.AddScoped<ILeitorDocumento, LeitorDocumento>();
 builder.Services.AddScoped<IConferenciaExtracao, ConferenciaExtracaoService>();
 builder.Services.AddScoped<IProcessadorDocumento, ProcessadorDocumento>();
 
-// ---------- Banco de dados ----------
-// A connection string fica no appsettings.json (ConnectionStrings:LabFlow) e não no código.
 var connectionString = builder.Configuration.GetConnectionString("LabFlow")
     ?? throw new InvalidOperationException("Connection string 'LabFlow' não configurada em appsettings.json.");
 
 builder.Services.AddDbContext<LabFlowContext>(options => options.UseSqlServer(connectionString));
 
-// ---------- Repositórios ----------
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<IDocumentoRepository, DocumentoRepository>();
 builder.Services.AddScoped<IExtracaoRepository, ExtracaoRepository>();
 builder.Services.AddScoped<IValidacaoRepository, ValidacaoRepository>();
 builder.Services.AddScoped<IHistoricoRepository, HistoricoRepository>();
 
-// ---------- Autenticação JWT ----------
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key não configurada em appsettings.json.");
 
@@ -71,8 +61,6 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        // Sem isso, o handler mapeia "role" -> ClaimTypes.Role e "sub" -> NameIdentifier,
-        // e o IsInRole/Roles quebra: o token traz "role", mas a validação procura a URI longa.
         options.MapInboundClaims = false;
 
         options.TokenValidationParameters = new TokenValidationParameters
@@ -85,13 +73,10 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(2),
-            // Mantém as claims com os nomes do token (sub, role, name) em vez de remapeá-las
             NameClaimType = "name",
             RoleClaimType = "role"
         };
 
-
-        // >>> NOVO: derruba o token de quem foi desativado ou removido <<<
         options.Events = new JwtBearerEvents
         {
             OnTokenValidated = contexto =>
@@ -103,7 +88,6 @@ builder.Services
 
                 var usuario = idUsuario == null ? null : repositorio.BuscarPorId(idUsuario.Value);
 
-                // Usuário apagado ou desativado: o token deixa de valer na hora
                 if (usuario == null || usuario.Ativo != true)
                 {
                     contexto.Fail("Usuário inativo ou inexistente.");
@@ -117,7 +101,6 @@ builder.Services
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 
-// ---------- Swagger ----------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -139,7 +122,6 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// ---------- CORS (app mobile / Expo) ----------
 const string PoliticaCors = "LabFlowCors";
 
 builder.Services.AddCors(options =>

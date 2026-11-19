@@ -1,12 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Modal, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../login/LoginStyle';
-import { docColors } from '../centralDeDocumentos/centralDeDocumentosStyle';
-import { styles } from './centralDeAtendimentosStyle';
+import { usePreferences, useThemedStyles } from '../../../context/PreferencesContext';
+import { createStyles } from './centralDeAtendimentosStyle';
 import MenuGlobal from '../../../components/MenuGlobal/MenuGlobal';
 
-// Itens por página. Se o design pedir 16 (como em documentos) ou 15, basta trocar aqui.
 const PAGE_SIZE = 10;
 const TOTAL_ATENDIMENTOS = 48;
 
@@ -14,7 +12,6 @@ const TIPOS = ['Suporte', 'Validação', 'Integração', 'Relatório', 'Document
 const PRIORIDADES = ['Alta', 'Média', 'Baixa'];
 const EMPTY_FILTERS = { tipos: [], prioridades: [] };
 
-// Mock temporário. Quando a API existir, mover para um service/hook.
 const CLIENTES = [
   'Microsoft Ltda.', 'Google Brasil', 'Amazon Serviços', 'Oracle do Brasil', 'SAP Consultoria',
   'Itaú Unibanco', 'Natura Cosméticos', 'Magazine Luiza', 'Petrobras S.A.', 'Embraer S.A.',
@@ -25,10 +22,9 @@ const pad = (n) => String(n).padStart(2, '0');
 
 const ATENDIMENTOS = Array.from({ length: TOTAL_ATENDIMENTOS }, (_, index) => {
   const dia = ((index * 7) % 28) + 1;
-  const mes = ((index * 5) % 10) + 1; // jan a out/2026
+  const mes = ((index * 5) % 10) + 1;
   return {
     id: index + 1,
-    // protocolos únicos e crescentes, com saltos irregulares
     protocolo: `ATD-${String(4832 + index * 4 + (index % 3)).padStart(6, '0')}`,
     tipo: TIPOS[(index * 3 + Math.floor(index / 5)) % TIPOS.length],
     prioridade: PRIORIDADES[(index * 7 + Math.floor(index / 3)) % PRIORIDADES.length],
@@ -37,7 +33,6 @@ const ATENDIMENTOS = Array.from({ length: TOTAL_ATENDIMENTOS }, (_, index) => {
   };
 });
 
-// Gera 1 2 3 … 8 9 10 com janela ao redor da página atual.
 function getPageItems(current, total) {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
   const items = [1];
@@ -50,8 +45,8 @@ function getPageItems(current, total) {
   return items;
 }
 
-// Mesmo padrão de badge da central de documentos (fundo claro + texto colorido)
 function PriorityBadge({ prioridade }) {
+  const styles = useThemedStyles(createStyles);
   const variants = {
     Alta: [styles.badgeAlta, styles.badgeAltaText],
     'Média': [styles.badgeMedia, styles.badgeMediaText],
@@ -65,9 +60,16 @@ function PriorityBadge({ prioridade }) {
   );
 }
 
-function AtendimentoRow({ item, onActions }) {
+function AtendimentoRow({ item, onActions, onOpen }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
   return (
-    <Pressable style={({ hovered }) => [styles.row, hovered && styles.rowHover]}>
+    <Pressable
+      onPress={() => onOpen(item)}
+      accessibilityRole="button"
+      accessibilityLabel={`Abrir atendimento ${item.protocolo}`}
+      style={({ hovered }) => [styles.row, hovered && styles.rowHover]}
+    >
       <View style={[styles.cell, styles.cellProtocolo]}>
         <Text style={styles.cellText} numberOfLines={1}>{item.protocolo}</Text>
       </View>
@@ -85,11 +87,14 @@ function AtendimentoRow({ item, onActions }) {
       </View>
       <View style={[styles.cell, styles.cellAcoes, styles.cellLast]}>
         <Pressable
-          onPress={(e) => onActions(item, e.nativeEvent)}
+          onPress={(e) => {
+            if (e && e.stopPropagation) e.stopPropagation();
+            onActions(item, e.nativeEvent);
+          }}
           accessibilityRole="button"
           accessibilityLabel={`Ações do atendimento ${item.protocolo}`}
         >
-          <Ionicons name="ellipsis-horizontal" size={20} color={docColors.sidebar} />
+          <Ionicons name="ellipsis-horizontal" size={20} color={colors.text} />
         </Pressable>
       </View>
     </Pressable>
@@ -97,6 +102,7 @@ function AtendimentoRow({ item, onActions }) {
 }
 
 function FilterChip({ label, selected, onPress }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected]} accessibilityRole="button">
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
@@ -110,10 +116,13 @@ export default function CentralDeAtendimentos({
   onAddAtendimento,
   onOpenAtendimento,
 }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
+
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState(EMPTY_FILTERS); // filtros aplicados
-  const [draft, setDraft] = useState(EMPTY_FILTERS); // rascunho editado no modal
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [draft, setDraft] = useState(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
   const [actionMenu, setActionMenu] = useState(null);
 
@@ -141,8 +150,8 @@ export default function CentralDeAtendimentos({
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const pageItems = getPageItems(currentPage, totalPages);
 
-  function handleNavigate(key) {
-    if (onNavigate) onNavigate(key);
+  function handleNavigate(key, params) {
+    if (onNavigate) onNavigate(key, params);
   }
 
   function handleSearch(text) {
@@ -188,38 +197,46 @@ export default function CentralDeAtendimentos({
     setActionMenu(null);
   }
 
+  function openItem(item) {
+    if (!item) return;
+    if (onOpenAtendimento) {
+      onOpenAtendimento(item);
+      return;
+    }
+    handleNavigate('atendimento', item);
+  }
+
   function handleOpen() {
     const item = actionMenu?.item;
     closeActions();
-    if (onOpenAtendimento) onOpenAtendimento(item);
+    openItem(item);
   }
 
   return (
     <View style={styles.container}>
-      {/* Menu global: compartilhado entre todas as telas */}
       <MenuGlobal activeMenu={activeMenu} onNavigate={handleNavigate} />
 
       <ScrollView style={styles.main} contentContainerStyle={styles.mainContent} showsVerticalScrollIndicator={false}>
         <View style={styles.titleRow}>
-          <Ionicons name="people-outline" size={32} color={docColors.sidebar} style={styles.titleIcon} />
+          <Ionicons name="people-outline" size={32} color={colors.text} style={styles.titleIcon} />
           <Text style={styles.title}>Central de Atendimentos</Text>
         </View>
         <Text style={styles.subtitle}>Gerencie e acompanhe atendimentos</Text>
 
         <View style={styles.toolbar}>
           <View style={styles.searchBox}>
-            <Ionicons name="search" size={18} color={docColors.sidebar} />
+            <Ionicons name="search" size={18} color={colors.text} />
             <TextInput
               style={styles.searchInput}
               placeholder="Pesquisar atendimento..."
-              placeholderTextColor={docColors.sidebar}
+              placeholderTextColor={colors.textMuted}
               value={search}
               onChangeText={handleSearch}
             />
           </View>
 
           <Pressable style={styles.filterButton} onPress={openFilter} accessibilityRole="button" accessibilityLabel="Filtrar">
-            <Ionicons name="funnel-outline" size={20} color={docColors.sidebar} />
+            <Ionicons name="funnel-outline" size={20} color={colors.text} />
             {activeFiltersCount > 0 && (
               <View style={styles.filterBadge}>
                 <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
@@ -233,7 +250,7 @@ export default function CentralDeAtendimentos({
             accessibilityLabel="Adicionar atendimento"
             style={({ hovered }) => [styles.addButton, hovered && styles.addButtonHover]}
           >
-            <Ionicons name="add" size={24} color={colors.white} />
+            <Ionicons name="add" size={24} color={colors.onPrimary} />
           </Pressable>
         </View>
 
@@ -250,7 +267,9 @@ export default function CentralDeAtendimentos({
           {visible.length === 0 ? (
             <Text style={styles.emptyText}>Nenhum atendimento encontrado.</Text>
           ) : (
-            visible.map((item) => <AtendimentoRow key={item.id} item={item} onActions={openActions} />)
+            visible.map((item) => (
+              <AtendimentoRow key={item.id} item={item} onActions={openActions} onOpen={openItem} />
+            ))
           )}
 
           <View style={styles.footer}>
@@ -263,7 +282,7 @@ export default function CentralDeAtendimentos({
                 style={[styles.pageButton, currentPage === 1 && styles.pageButtonDisabled]}
                 accessibilityLabel="Página anterior"
               >
-                <Ionicons name="caret-back" size={11} color={docColors.sidebar} />
+                <Ionicons name="caret-back" size={11} color={colors.text} />
               </Pressable>
 
               {pageItems.map((n) =>
@@ -289,21 +308,20 @@ export default function CentralDeAtendimentos({
                 style={[styles.pageButton, currentPage === totalPages && styles.pageButtonDisabled]}
                 accessibilityLabel="Próxima página"
               >
-                <Ionicons name="caret-forward" size={11} color={docColors.sidebar} />
+                <Ionicons name="caret-forward" size={11} color={colors.text} />
               </Pressable>
             </View>
           </View>
         </View>
       </ScrollView>
 
-      {/* Modal de filtros */}
       <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
         <Pressable style={styles.filterOverlay} onPress={() => setFilterOpen(false)}>
           <Pressable style={styles.filterPanel} onPress={() => {}}>
             <View style={styles.filterHeader}>
               <Text style={styles.filterTitle}>Filtrar atendimentos</Text>
               <Pressable onPress={() => setFilterOpen(false)} accessibilityLabel="Fechar">
-                <Ionicons name="close" size={20} color={docColors.sidebar} />
+                <Ionicons name="close" size={20} color={colors.text} />
               </Pressable>
             </View>
 
@@ -316,8 +334,8 @@ export default function CentralDeAtendimentos({
 
             <Text style={styles.filterLabel}>Tipo de atendimento</Text>
             <View style={styles.chipsRow}>
-              {TIPOS.map((t) => (
-                <FilterChip key={t} label={t} selected={draft.tipos.includes(t)} onPress={() => toggleDraft('tipos', t)} />
+              {TIPOS.map((tp) => (
+                <FilterChip key={tp} label={tp} selected={draft.tipos.includes(tp)} onPress={() => toggleDraft('tipos', tp)} />
               ))}
             </View>
 
@@ -333,13 +351,12 @@ export default function CentralDeAtendimentos({
         </Pressable>
       </Modal>
 
-      {/* Menu flutuante de ações da linha (mesmo padrão da central de documentos) */}
       <Modal visible={!!actionMenu} transparent animationType="fade" onRequestClose={closeActions}>
         <Pressable style={styles.menuOverlay} onPress={closeActions}>
           {actionMenu && (
             <View style={[styles.actionMenu, { top: actionMenu.top, left: actionMenu.left }]}>
               <Pressable onPress={handleOpen} style={({ hovered }) => [styles.actionItem, hovered && styles.rowHover]}>
-                <Ionicons name="open-outline" size={16} color={docColors.sidebar} />
+                <Ionicons name="open-outline" size={16} color={colors.text} />
                 <Text style={styles.actionText}>Abrir atendimento</Text>
               </Pressable>
             </View>

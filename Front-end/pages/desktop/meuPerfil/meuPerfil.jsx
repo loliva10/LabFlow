@@ -1,17 +1,25 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, ScrollView, Switch, TouchableOpacity } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  ScrollView,
+  TouchableOpacity,
+  Pressable,
+  Modal,
+  Image,
+  Platform,
+  Animated,
+  Easing,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import MenuGlobal from '../../../components/MenuGlobal/MenuGlobal';
-import { usePreferences, languages } from '../../../context/PreferencesContext';
+import { usePreferences } from '../../../context/PreferencesContext';
+import { useUser } from '../../../context/UserContext';
 import { createStyles } from './meuPerfilStyle';
 
-const DADOS_INICIAIS = {
-  nome: 'Luis Oliva',
-  email: 'luis.oliva@labflow.com',
-  cargo: 'Administrador',
-  instituicao: 'LabFlow',
-  telefone: '(11) 91234-5678',
-};
+const PERFIL_ADMIN = 'Administrador';
 
 function getIniciais(nome) {
   const partes = nome.trim().split(' ').filter(Boolean);
@@ -28,54 +36,99 @@ function useStyles() {
 function Campo({ label, value, onChangeText, editable = true, ...rest }) {
   const { colors } = usePreferences();
   const styles = useStyles();
+  const [focado, setFocado] = useState(false);
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
-        style={[styles.input, !editable && styles.inputDisabled]}
+        style={[
+          styles.input,
+          editable && focado && styles.inputFocused,
+          !editable && styles.inputDisabled,
+        ]}
         value={value}
         onChangeText={onChangeText}
         editable={editable}
         placeholderTextColor={colors.textMuted}
+        onFocus={() => setFocado(true)}
+        onBlur={() => setFocado(false)}
         {...rest}
       />
     </View>
   );
 }
 
-function Seletor({ opcoes, valor, onChange }) {
+function SwitchAnimado({ value, onValueChange, iconeOn, iconeOff, textoOn, textoOff }) {
   const { colors } = usePreferences();
-  const styles = useStyles();
+  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: value ? 1 : 0,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [value, anim]);
+
+  const trilho = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.switchOff, colors.accent],
+  });
+  const translateX = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [2, 22],
+  });
+  const girar = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const temIcone = Boolean(iconeOn && iconeOff);
+  const temTexto = Boolean(textoOn && textoOff);
+
   return (
-    <View style={styles.optionRow}>
-      {opcoes.map((op) => {
-        const ativo = op.value === valor;
-        return (
-          <TouchableOpacity
-            key={op.value}
-            style={[styles.option, ativo && styles.optionActive]}
-            onPress={() => onChange(op.value)}
-            activeOpacity={0.8}
-          >
-            {op.icon ? (
-              <Ionicons
-                name={op.icon}
-                size={16}
-                color={ativo ? colors.onPrimary : colors.text}
-              />
-            ) : null}
-            <Text style={[styles.optionText, ativo && styles.optionTextActive]}>
-              {op.label}
+    <Pressable
+      onPress={() => onValueChange(!value)}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      style={Platform.OS === 'web' ? { cursor: 'pointer' } : undefined}
+    >
+      <Animated.View
+        style={{
+          width: 46,
+          height: 26,
+          borderRadius: 13,
+          backgroundColor: trilho,
+          justifyContent: 'center',
+        }}
+      >
+        <Animated.View
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 11,
+            backgroundColor: '#FFFFFF',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transform: [{ translateX }, { rotate: temIcone ? girar : '0deg' }],
+          }}
+        >
+          {temIcone ? (
+            <Ionicons name={value ? iconeOn : iconeOff} size={14} color={colors.accent} />
+          ) : null}
+          {!temIcone && temTexto ? (
+            <Text style={{ fontSize: 9, fontWeight: '700', color: colors.accent }}>
+              {value ? textoOn : textoOff}
             </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
+          ) : null}
+        </Animated.View>
+      </Animated.View>
+    </Pressable>
   );
 }
 
-function LinhaSwitch({ titulo, descricao, value, onValueChange }) {
-  const { colors } = usePreferences();
+function LinhaSwitch({ titulo, descricao, value, onValueChange, ...rest }) {
   const styles = useStyles();
   return (
     <View style={styles.switchRow}>
@@ -83,12 +136,7 @@ function LinhaSwitch({ titulo, descricao, value, onValueChange }) {
         <Text style={styles.switchTitle}>{titulo}</Text>
         <Text style={styles.switchDescription}>{descricao}</Text>
       </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: colors.switchOff, true: colors.accent }}
-        thumbColor="#FFFFFF"
-      />
+      <SwitchAnimado value={value} onValueChange={onValueChange} {...rest} />
     </View>
   );
 }
@@ -111,35 +159,55 @@ function TituloCard({ icone, texto }) {
   const styles = useStyles();
   return (
     <View style={styles.cardTitleRow}>
-      <Ionicons name={icone} size={20} color={colors.accent} />
+      <View style={styles.cardTitleIcon}>
+        <Ionicons name={icone} size={20} color={colors.accent} />
+      </View>
       <Text style={styles.cardTitle}>{texto}</Text>
     </View>
   );
 }
 
-export default function MeuPerfil({ activeMenu = 'perfil', onNavigate, onLogout }) {
-  const { colors, theme, setTheme, language, setLanguage, t } = usePreferences();
+export default function MeuPerfil({
+  activeMenu = 'perfil',
+  onNavigate,
+  onLogout,
+  perfil = PERFIL_ADMIN,
+}) {
+  const {
+    colors,
+    theme,
+    setTheme,
+    language,
+    setLanguage,
+    notifEmail,
+    setNotifEmail,
+    notifSistema,
+    setNotifSistema,
+    t,
+  } = usePreferences();
   const styles = useStyles();
+  const { user, setUser } = useUser();
 
-  const [dados, setDados] = useState(DADOS_INICIAIS);
-  const [backup, setBackup] = useState(DADOS_INICIAIS);
+  const isAdmin = perfil === PERFIL_ADMIN;
+
+  const [dados, setDados] = useState(user);
+  const [backup, setBackup] = useState(user);
   const [editando, setEditando] = useState(false);
   const [msgPerfil, setMsgPerfil] = useState(null);
 
-  const [notifEmail, setNotifEmail] = useState(true);
-  const [notifSistema, setNotifSistema] = useState(true);
+  const [fotoMenuAberto, setFotoMenuAberto] = useState(false);
 
   const [senhaAtual, setSenhaAtual] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [msgSenha, setMsgSenha] = useState(null);
 
-  const temas = [
-    { value: 'claro', label: t('perfil.temaClaro'), icon: 'sunny-outline' },
-    { value: 'escuro', label: t('perfil.temaEscuro'), icon: 'moon-outline' },
-  ];
+  const foto = user.avatarUrl;
+  const escuro = theme === 'escuro';
+  const ingles = language === 'en';
 
   function atualizar(campo, valor) {
+    if (campo === 'cargo' && !isAdmin) return;
     setDados((prev) => ({ ...prev, [campo]: valor }));
   }
 
@@ -164,6 +232,14 @@ export default function MeuPerfil({ activeMenu = 'perfil', onNavigate, onLogout 
       setMsgPerfil({ tipo: 'erro', chave: 'perfil.erroEmail' });
       return;
     }
+    setUser((prev) => ({
+      ...prev,
+      nome: dados.nome,
+      email: dados.email,
+      cargo: dados.cargo,
+      instituicao: dados.instituicao,
+      telefone: dados.telefone,
+    }));
     setEditando(false);
     setMsgPerfil({ tipo: 'ok', chave: 'perfil.okPerfil' });
   }
@@ -195,37 +271,78 @@ export default function MeuPerfil({ activeMenu = 'perfil', onNavigate, onLogout 
     if (onLogout) onLogout();
   }
 
+  function definirFoto(uri) {
+    setUser((prev) => ({ ...prev, avatarUrl: uri }));
+  }
+
+  async function escolherFoto() {
+    setFotoMenuAberto(false);
+    if (Platform.OS !== 'web') {
+      const permissao = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissao.granted) return;
+    }
+    const resultado = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!resultado.canceled && resultado.assets && resultado.assets.length > 0) {
+      definirFoto(resultado.assets[0].uri);
+    }
+  }
+
+  function removerFoto() {
+    definirFoto(null);
+    setFotoMenuAberto(false);
+  }
+
   return (
     <View style={styles.container}>
       <MenuGlobal activeMenu={activeMenu} onNavigate={onNavigate} />
 
       <View style={styles.content}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <View>
               <View style={styles.titleRow}>
-                <Ionicons name="person-circle-outline" size={36} color={colors.text} />
+                <Ionicons name="person-circle-outline" size={28} color={colors.text} />
                 <Text style={styles.title}>{t('perfil.titulo')}</Text>
               </View>
               <Text style={styles.subtitle}>{t('perfil.subtitulo')}</Text>
             </View>
 
-            <TouchableOpacity style={styles.logoutButton} onPress={sair} activeOpacity={0.8}>
-              <Ionicons name="log-out-outline" size={20} color={colors.danger} />
-              <Text style={styles.logoutButtonText}>{t('perfil.sair')}</Text>
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.logoutButton} onPress={sair} activeOpacity={0.8}>
+                <Ionicons name="log-out-outline" size={20} color={colors.danger} />
+                <Text style={styles.logoutButtonText}>{t('perfil.sair')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.columns}>
             <View style={styles.column}>
               <View style={styles.card}>
                 <View style={styles.profileRow}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{getIniciais(dados.nome)}</Text>
-                  </View>
+                  <Pressable
+                    style={styles.avatarWrapper}
+                    onPress={() => setFotoMenuAberto(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('perfil.fotoAlterarLabel')}
+                  >
+                    <View style={styles.avatar}>
+                      {foto ? (
+                        <Image source={{ uri: foto }} style={styles.avatarImage} />
+                      ) : (
+                        <Text style={styles.avatarText}>{getIniciais(user.nome)}</Text>
+                      )}
+                    </View>
+                    <View style={styles.avatarBadge}>
+                      <Ionicons name="camera" size={14} color={colors.onPrimary} />
+                    </View>
+                  </Pressable>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.profileName}>{dados.nome}</Text>
-                    <Text style={styles.profileRole}>{dados.cargo}</Text>
+                    <Text style={styles.profileName}>{user.nome}</Text>
+                    <Text style={styles.profileRole}>{user.cargo}</Text>
                   </View>
                 </View>
 
@@ -247,12 +364,14 @@ export default function MeuPerfil({ activeMenu = 'perfil', onNavigate, onLogout 
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
-                <Campo
-                  label={t('perfil.cargo')}
-                  value={dados.cargo}
-                  onChangeText={(v) => atualizar('cargo', v)}
-                  editable={editando}
-                />
+                {isAdmin && (
+                  <Campo
+                    label={t('perfil.cargo')}
+                    value={dados.cargo}
+                    onChangeText={(v) => atualizar('cargo', v)}
+                    editable={editando}
+                  />
+                )}
                 <Campo
                   label={t('perfil.instituicao')}
                   value={dados.instituicao}
@@ -305,15 +424,22 @@ export default function MeuPerfil({ activeMenu = 'perfil', onNavigate, onLogout 
               <View style={styles.card}>
                 <TituloCard icone="options-outline" texto={t('perfil.preferencias')} />
 
-                <View style={styles.field}>
-                  <Text style={styles.label}>{t('perfil.tema')}</Text>
-                  <Seletor opcoes={temas} valor={theme} onChange={setTheme} />
-                </View>
-
-                <View style={styles.field}>
-                  <Text style={styles.label}>{t('perfil.idioma')}</Text>
-                  <Seletor opcoes={languages} valor={language} onChange={setLanguage} />
-                </View>
+                <LinhaSwitch
+                  titulo={t('perfil.tema')}
+                  descricao={escuro ? t('perfil.temaEscuro') : t('perfil.temaClaro')}
+                  value={escuro}
+                  onValueChange={(v) => setTheme(v ? 'escuro' : 'claro')}
+                  iconeOn="moon"
+                  iconeOff="sunny"
+                />
+                <LinhaSwitch
+                  titulo={t('perfil.idioma')}
+                  descricao={ingles ? t('perfil.idiomaEn') : t('perfil.idiomaPt')}
+                  value={ingles}
+                  onValueChange={(v) => setLanguage(v ? 'en' : 'pt')}
+                  textoOn="EN"
+                  textoOff="PT"
+                />
 
                 <View style={styles.divider} />
 
@@ -371,6 +497,52 @@ export default function MeuPerfil({ activeMenu = 'perfil', onNavigate, onLogout 
           </View>
         </ScrollView>
       </View>
+
+      <Modal
+        visible={fotoMenuAberto}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFotoMenuAberto(false)}
+      >
+        <Pressable style={styles.photoOverlay} onPress={() => setFotoMenuAberto(false)}>
+          <Pressable style={styles.photoMenu} onPress={() => {}}>
+            <View style={styles.photoMenuHeader}>
+              <Text style={styles.photoMenuTitle}>{t('perfil.fotoTitulo')}</Text>
+              <Pressable
+                onPress={() => setFotoMenuAberto(false)}
+                accessibilityLabel={t('perfil.fechar')}
+              >
+                <Ionicons name="close" size={20} color={colors.text} />
+              </Pressable>
+            </View>
+
+            <Pressable
+              onPress={escolherFoto}
+              style={({ hovered }) => [styles.photoItem, hovered && styles.photoItemHover]}
+            >
+              <Ionicons name="image-outline" size={20} color={colors.text} />
+              <Text style={styles.photoItemText}>
+                {foto ? t('perfil.fotoAlterar') : t('perfil.fotoEscolher')}
+              </Text>
+            </Pressable>
+
+            {foto && (
+              <>
+                <View style={styles.photoDivider} />
+                <Pressable
+                  onPress={removerFoto}
+                  style={({ hovered }) => [styles.photoItem, hovered && styles.photoItemHover]}
+                >
+                  <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                  <Text style={[styles.photoItemText, styles.photoItemDanger]}>
+                    {t('perfil.fotoRemover')}
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
-}
+} 

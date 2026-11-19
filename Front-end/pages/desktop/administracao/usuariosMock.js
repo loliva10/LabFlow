@@ -2,7 +2,6 @@ const CARGOS = [
   'Professor',
   'Técnico de laboratório',
   'Coordenador',
-  'Administrador',
   'Analista',
   'Assistente',
   'Estagiário',
@@ -11,7 +10,6 @@ const CARGOS = [
 ];
 
 const PERFIS = [
-  'Administrador',
   'Gestor',
   'Operador',
   'Visualizador',
@@ -55,12 +53,17 @@ for (let i = fixos.length; i < 50; i += 1) {
   });
 }
 
-export const usuariosIniciais = [...fixos, ...gerados].map((usuario, index) => ({
-  id: index + 1,
-  nome: usuario.nome,
-  email: usuario.email,
-  senha: '123456',
-  perfil: PERFIS[index % PERFIS.length],
-  cargo: CARGOS[index % CARGOS.length],
-  ativo: usuario.ativo,
-}));
+export const PERFIL_ADMIN = 'Administrador';
+
+export const usuariosIniciais = [...fixos, ...gerados].map((usuario, index) => {
+  const ehAdmin = index === 0; 
+  return {
+    id: index + 1,
+    nome: usuario.nome,
+    email: usuario.email,
+    senha: '123456',
+    perfil: ehAdmin ? PERFIL_ADMIN : PERFIS[(index - 1) % PERFIS.length],
+    cargo: ehAdmin ? 'Administrador' : CARGOS[index % CARGOS.length],
+    ativo: usuario.ativo,
+  };
+});

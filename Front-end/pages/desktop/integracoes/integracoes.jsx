@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Text, TextInput, Pressable, ScrollView, Modal } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { usePreferences, useThemedStyles } from '../../../context/PreferencesContext';
 import MenuGlobal from '../../../components/MenuGlobal/MenuGlobal';
-import styles, { cores } from './integracoesStyle';
+import { createStyles } from './integracoesStyle';
 
-// Dados de exemplo — trocar pela chamada da API depois
 const INTEGRACOES = [
   { id: 1, nome: 'SAP', icone: 'alpha-s-circle', cor: '#0A6ED1', conectado: true, descricao: 'Integração de notas fiscais e dados cadastrais', sync: '15/10/2026 às 14:32' },
   { id: 2, nome: 'TOTVS', icone: 'hexagon-multiple', cor: '#1B3A6B', conectado: true, descricao: 'Integração de documentos e dados cadastrais', sync: '15/10/2026 às 14:32' },
@@ -26,31 +26,41 @@ const INTEGRACOES = [
   { id: 18, nome: 'Zapier', icone: 'lightning-bolt', cor: '#FF4A00', conectado: true, descricao: 'Automação de fluxos entre aplicativos', sync: '11/10/2026 às 11:30' },
 ];
 
-const OPCOES_FILTRO = [
-  { valor: 'todas', rotulo: 'Todas' },
-  { valor: 'conectadas', rotulo: 'Conectadas' },
-  { valor: 'desconectadas', rotulo: 'Desconectadas' },
-];
+const STATUS_OPCOES = ['Conectado', 'Desconectado'];
+const EMPTY_FILTERS = { status: [] };
 
-export default function Integracoes({ activeMenu, onNavigate }) {
+function FilterChip({ label, selected, onPress }) {
+  const styles = useThemedStyles(createStyles);
+  return (
+    <Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected]} accessibilityRole="button">
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+export default function Integracoes({ activeMenu = 'integracoes', onNavigate }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
+
   const [busca, setBusca] = useState('');
-  const [filtro, setFiltro] = useState('todas');
-  const [filtroAberto, setFiltroAberto] = useState(false);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [draft, setDraft] = useState(EMPTY_FILTERS);
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const activeFiltersCount = filters.status.length;
 
   const lista = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return INTEGRACOES.filter((item) => {
-      if (filtro === 'conectadas' && !item.conectado) return false;
-      if (filtro === 'desconectadas' && item.conectado) return false;
+      if (filters.status.length && !filters.status.includes(item.conectado ? 'Conectado' : 'Desconectado')) return false;
       if (!termo) return true;
       return (
         item.nome.toLowerCase().includes(termo) ||
         item.descricao.toLowerCase().includes(termo)
       );
     });
-  }, [busca, filtro]);
+  }, [busca, filters]);
 
-  // Agrupa em linhas de 3 e completa com espaços vazios para o último card não esticar
   const linhas = useMemo(() => {
     const resultado = [];
     for (let i = 0; i < lista.length; i += 3) {
@@ -60,6 +70,29 @@ export default function Integracoes({ activeMenu, onNavigate }) {
     }
     return resultado;
   }, [lista]);
+
+  function openFilter() {
+    setDraft(filters);
+    setFilterOpen(true);
+  }
+
+  function toggleDraft(field, value) {
+    setDraft((prev) => ({
+      ...prev,
+      [field]: prev[field].includes(value) ? prev[field].filter((v) => v !== value) : [...prev[field], value],
+    }));
+  }
+
+  function applyFilters() {
+    setFilters(draft);
+    setFilterOpen(false);
+  }
+
+  function clearFilters() {
+    setDraft(EMPTY_FILTERS);
+    setFilters(EMPTY_FILTERS);
+    setFilterOpen(false);
+  }
 
   return (
     <View style={styles.container}>
@@ -72,62 +105,32 @@ export default function Integracoes({ activeMenu, onNavigate }) {
       >
         <View style={styles.cabecalho}>
           <View style={styles.tituloLinha}>
-            <MaterialCommunityIcons name="power-plug-outline" size={28} color={cores.titulo} />
+            <MaterialCommunityIcons name="power-plug-outline" size={28} color={colors.text} />
             <Text style={styles.titulo}>Integrações Corporativas</Text>
           </View>
           <Text style={styles.subtitulo}>Conecte o LabFlow aos sistemas da sua instituição</Text>
         </View>
 
-        <View style={styles.barraAcoes}>
-          <View style={styles.barraEsquerda}>
-            <View style={styles.campoBusca}>
-              <MaterialCommunityIcons name="magnify" size={18} color={cores.principal} />
-              <TextInput
-                style={styles.inputBusca}
-                placeholder="Pesquisar integração..."
-                placeholderTextColor="#7A8A8A"
-                value={busca}
-                onChangeText={setBusca}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.botaoFiltro, filtro !== 'todas' && styles.botaoFiltroAtivo]}
-              onPress={() => setFiltroAberto((aberto) => !aberto)}
-            >
-              <MaterialCommunityIcons
-                name="filter-outline"
-                size={20}
-                color={filtro !== 'todas' ? cores.branco : cores.principal}
-              />
-            </TouchableOpacity>
+        <View style={styles.toolbar}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search" size={18} color={colors.text} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Pesquisar integração..."
+              placeholderTextColor={colors.textMuted}
+              value={busca}
+              onChangeText={setBusca}
+            />
           </View>
 
-          <TouchableOpacity style={styles.botaoMais}>
-            <MaterialCommunityIcons name="plus" size={24} color={cores.branco} />
-          </TouchableOpacity>
-
-          {filtroAberto && (
-            <View style={styles.menuFiltro}>
-              <Text style={styles.tituloMenuFiltro}>Status</Text>
-              {OPCOES_FILTRO.map((opcao) => {
-                const ativo = filtro === opcao.valor;
-                return (
-                  <TouchableOpacity
-                    key={opcao.valor}
-                    style={[styles.itemFiltro, ativo && styles.itemFiltroAtivo]}
-                    onPress={() => {
-                      setFiltro(opcao.valor);
-                      setFiltroAberto(false);
-                    }}
-                  >
-                    <Text style={styles.textoItemFiltro}>{opcao.rotulo}</Text>
-                    {ativo && <MaterialCommunityIcons name="check" size={18} color={cores.principal} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
+          <Pressable style={styles.filterButton} onPress={openFilter} accessibilityRole="button" accessibilityLabel="Filtrar">
+            <Ionicons name="funnel-outline" size={20} color={colors.text} />
+            {activeFiltersCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
+              </View>
+            )}
+          </Pressable>
         </View>
 
         <View style={styles.grade}>
@@ -137,50 +140,50 @@ export default function Integracoes({ activeMenu, onNavigate }) {
                 item === null ? (
                   <View key={`vazio-${pos}`} style={styles.cardVazio} />
                 ) : (
-              <View key={item.id} style={styles.card}>
-                <View style={styles.cardTopo}>
-                  <View style={styles.logoLinha}>
-                    <MaterialCommunityIcons name={item.icone} size={38} color={item.cor} />
-                    <Text style={styles.nomeIntegracao}>{item.nome}</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.selo,
-                      item.conectado ? styles.seloConectado : styles.seloDesconectado,
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.seloPonto,
-                        { backgroundColor: item.conectado ? cores.verde : '#8A9494' },
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.seloTexto,
-                        { color: item.conectado ? cores.verde : '#5F6B6B' },
-                      ]}
-                    >
-                      {item.conectado ? 'Conectado' : 'Desconectado'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.linhaInfo}>
-                  <MaterialCommunityIcons name="plus" size={16} color={cores.texto} />
-                  <Text style={styles.textoInfo}>{item.descricao}</Text>
-                </View>
-
-                {item.sync && (
-                  <View style={styles.linhaInfo}>
-                    <MaterialCommunityIcons name="sync" size={16} color={cores.texto} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.rotuloSync}>Última sincronização</Text>
-                      <Text style={styles.dataSync}>{item.sync}</Text>
+                  <View key={item.id} style={styles.card}>
+                    <View style={styles.cardTopo}>
+                      <View style={styles.logoLinha}>
+                        <MaterialCommunityIcons name={item.icone} size={38} color={item.cor} />
+                        <Text style={styles.nomeIntegracao}>{item.nome}</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.selo,
+                          item.conectado ? styles.seloConectado : styles.seloDesconectado,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.seloPonto,
+                            item.conectado ? styles.seloPontoConectado : styles.seloPontoDesconectado,
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.seloTexto,
+                            item.conectado ? styles.seloTextoConectado : styles.seloTextoDesconectado,
+                          ]}
+                        >
+                          {item.conectado ? 'Conectado' : 'Desconectado'}
+                        </Text>
+                      </View>
                     </View>
+
+                    <View style={styles.linhaInfo}>
+                      <MaterialCommunityIcons name="plus" size={16} color={colors.text} />
+                      <Text style={styles.textoInfo}>{item.descricao}</Text>
+                    </View>
+
+                    {item.sync && (
+                      <View style={styles.linhaInfo}>
+                        <MaterialCommunityIcons name="sync" size={16} color={colors.text} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.rotuloSync}>Última sincronização</Text>
+                          <Text style={styles.dataSync}>{item.sync}</Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
                 )
               )}
             </View>
@@ -188,12 +191,39 @@ export default function Integracoes({ activeMenu, onNavigate }) {
         </View>
 
         {lista.length === 0 && (
-            <View style={styles.vazio}>
-              <MaterialCommunityIcons name="power-plug-off-outline" size={40} color={cores.textoSuave} />
-              <Text style={styles.textoVazio}>Nenhuma integração encontrada</Text>
+          <View style={styles.vazio}>
+            <MaterialCommunityIcons name="power-plug-off-outline" size={40} color={colors.textMuted} />
+            <Text style={styles.textoVazio}>Nenhuma integração encontrada</Text>
           </View>
         )}
       </ScrollView>
+
+      <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
+        <Pressable style={styles.filterOverlay} onPress={() => setFilterOpen(false)}>
+          <Pressable style={styles.filterPanel} onPress={() => {}}>
+            <View style={styles.filterHeader}>
+              <Text style={styles.filterTitle}>Filtrar integrações</Text>
+              <Pressable onPress={() => setFilterOpen(false)} accessibilityLabel="Fechar">
+                <Ionicons name="close" size={20} color={colors.text} />
+              </Pressable>
+            </View>
+            <Text style={styles.filterLabel}>Status</Text>
+            <View style={styles.chipsRow}>
+              {STATUS_OPCOES.map((s) => (
+                <FilterChip key={s} label={s} selected={draft.status.includes(s)} onPress={() => toggleDraft('status', s)} />
+              ))}
+            </View>
+            <View style={styles.filterActions}>
+              <Pressable style={styles.filterClear} onPress={clearFilters}>
+                <Text style={styles.filterClearText}>Limpar</Text>
+              </Pressable>
+              <Pressable style={styles.filterApply} onPress={applyFilters}>
+                <Text style={styles.filterApplyText}>Aplicar</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

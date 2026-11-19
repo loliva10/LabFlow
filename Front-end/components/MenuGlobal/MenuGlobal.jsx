@@ -1,35 +1,50 @@
-import React from 'react';
-import { View, Text, Image, Pressable } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { styles } from './MenuGlobalStyle';
+import React, { useMemo } from 'react'
+import { View, Text, Image, Pressable } from 'react-native'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
+import { usePreferences } from '../../context/PreferencesContext'
+import { useUser } from '../../context/UserContext'
+import { createStyles } from './MenuGlobalStyle'
 
-const logoImage = require('../../assets/Logo (branca).png');
+const logoImage = require('../../assets/Logo (branca).png')
 
 const MENU_TOP = [
-  { key: 'dashboard', label: 'Dashboard', icon: { lib: 'ion', name: 'grid-outline' } },
-  { key: 'documentos', label: 'Documentos', icon: { lib: 'ion', name: 'document-text-outline' } },
-  { key: 'atendimentos', label: 'Atendimentos', icon: { lib: 'ion', name: 'headset-outline' } },
-  { key: 'integracoes', label: 'Integrações', icon: { lib: 'mci', name: 'power-plug-outline' } },
-];
+  { key: 'dashboard', labelKey: 'menu.dashboard', icon: 'grid-outline' },
+  { key: 'documentos', labelKey: 'menu.documentos', icon: 'document-text-outline' },
+  { key: 'atendimentos', labelKey: 'menu.atendimentos', icon: 'headset-outline' },
+  { key: 'integracoes', labelKey: 'menu.integracoes', icon: 'power-plug-outline', material: true },
+]
 
 const MENU_BOTTOM = [
-  { key: 'administracao', label: 'Administração', icon: { lib: 'ion', name: 'settings-outline' } },
-  { key: 'perfil', label: 'Meu perfil', icon: { lib: 'ion', name: 'person-circle-outline' } },
-];
+  { key: 'administracao', labelKey: 'menu.administracao', icon: 'settings-outline', adminOnly: true },
+  { key: 'perfil', labelKey: 'menu.perfil', icon: 'person-circle-outline' },
+]
 
-function MenuIcon({ icon }) {
-  if (icon.lib === 'mci') {
-    return <MaterialCommunityIcons name={icon.name} size={20} color="#FFFFFF" />;
+function MenuIcon({ item, color }) {
+  if (item.material) {
+    return (
+      <MaterialCommunityIcons
+        name={item.icon}
+        size={21}
+        color={color}
+      />
+    )
   }
-  return <Ionicons name={icon.name} size={20} color="#FFFFFF" />;
+
+  return (
+    <Ionicons
+      name={item.icon}
+      size={21}
+      color={color}
+    />
+  )
 }
 
-function MenuItem({ item, active, onNavigate }) {
+function MenuItem({ item, activeMenu, onNavigate, styles, colors, t }) {
+  const active = activeMenu === item.key
+
   return (
     <Pressable
-      onPress={() => onNavigate?.(item.key)}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
+      onPress={() => onNavigate && onNavigate(item.key)}
       style={({ hovered }) => [
         styles.navItem,
         active && styles.navItemActive,
@@ -37,37 +52,69 @@ function MenuItem({ item, active, onNavigate }) {
       ]}
     >
       <View style={styles.navIcon}>
-        <MenuIcon icon={item.icon} />
+        <MenuIcon
+          item={item}
+          color={colors.onPrimary}
+        />
       </View>
-      <Text style={styles.navText}>{item.label}</Text>
+
+      <Text style={styles.navText}>
+        {t(item.labelKey)}
+      </Text>
     </Pressable>
-  );
+  )
 }
 
-export default function MenuGlobal({ activeMenu = 'dashboard', onNavigate }) {
+export default function MenuGlobal({
+  activeMenu = 'dashboard',
+  onNavigate,
+}) {
+  const { colors, t } = usePreferences()
+  const { isAdmin } = useUser()
+  const styles = useMemo(() => createStyles(colors), [colors])
+
+  const menuBottomVisivel = useMemo(
+    () => MENU_BOTTOM.filter((item) => !item.adminOnly || isAdmin),
+    [isAdmin]
+  )
+
   return (
     <View style={styles.sidebar}>
-      <View>
-        <Image source={logoImage} resizeMode="contain" style={styles.sidebarLogo} />
+      <View style={styles.logoContainer}>
+        <Image
+          source={logoImage}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </View>
+
+      <View style={styles.menuTop}>
         {MENU_TOP.map((item) => (
           <MenuItem
             key={item.key}
             item={item}
-            active={activeMenu === item.key}
+            activeMenu={activeMenu}
             onNavigate={onNavigate}
+            styles={styles}
+            colors={colors}
+            t={t}
           />
         ))}
       </View>
-      <View style={styles.sidebarBottom}>
-        {MENU_BOTTOM.map((item) => (
+
+      <View style={styles.menuBottom}>
+        {menuBottomVisivel.map((item) => (
           <MenuItem
             key={item.key}
             item={item}
-            active={activeMenu === item.key}
+            activeMenu={activeMenu}
             onNavigate={onNavigate}
+            styles={styles}
+            colors={colors}
+            t={t}
           />
         ))}
       </View>
     </View>
-  );
+  )
 }

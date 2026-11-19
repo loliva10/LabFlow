@@ -1,12 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Modal, Dimensions } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../login/LoginStyle';
-import { styles, docColors } from './centralDeDocumentosStyle';
+import { usePreferences, useThemedStyles } from '../../../context/PreferencesContext';
+import { createStyles } from './centralDeDocumentosStyle';
 import MenuGlobal from '../../../components/MenuGlobal/MenuGlobal';
+
+const LOCALES = { pt: 'pt-BR', en: 'en-US', es: 'es-ES' };
+
 const PAGE_SIZE = 16;
 const TOTAL_DOCUMENTS = 48;
+
 const BASE_DOCUMENTS = [
   { prefixo: 'Nota_Fiscal', tipo: 'Nota Fiscal', status: 'Revisão', confianca: 95, data: '22/10/2026' },
   { prefixo: 'Laudo_Medico', tipo: 'Laudo', status: 'Conclusão', confianca: 100, data: '15/10/2026' },
@@ -23,6 +27,30 @@ const BASE_DOCUMENTS = [
   { prefixo: 'Recibo_Aluguel', tipo: 'Recibo', status: 'Revisão', confianca: 89, data: '05/03/2026' },
   { prefixo: 'Ficha_Cadastral', tipo: 'Ficha', status: 'Erro', confianca: 58, data: '22/10/2026' },
 ];
+
+const TIPO_KEYS = {
+  'Nota Fiscal': 'notaFiscal',
+  Laudo: 'laudo',
+  Contrato: 'contrato',
+  Pedido: 'pedido',
+  Exame: 'exame',
+  Receita: 'receita',
+  Boleto: 'boleto',
+  'Relatório': 'relatorio',
+  Comprovante: 'comprovante',
+  'Apólice': 'apolice',
+  Proposta: 'proposta',
+  'Certidão': 'certidao',
+  Recibo: 'recibo',
+  Ficha: 'ficha',
+};
+
+const STATUS_KEYS = {
+  'Revisão': 'revisao',
+  'Conclusão': 'conclusao',
+  Erro: 'erro',
+};
+
 const DOCUMENTS = Array.from({ length: TOTAL_DOCUMENTS }, (_, i) => {
   const base = BASE_DOCUMENTS[i % BASE_DOCUMENTS.length];
   return {
@@ -34,30 +62,46 @@ const DOCUMENTS = Array.from({ length: TOTAL_DOCUMENTS }, (_, i) => {
     data: base.data,
   };
 });
-const TIPOS = [...new Set(BASE_DOCUMENTS.map((d) => d.tipo))];
+
+const TIPOS = [...new Set(BASE_DOCUMENTS.map((d) => d.tipo)), 'Outro'];
 const STATUS = ['Revisão', 'Conclusão', 'Erro'];
-const CONFIANCA_OPCOES = [
-  { label: 'Todas', value: 0 },
-  { label: '70%+', value: 70 },
-  { label: '90%+', value: 90 },
-  { label: '100%', value: 100 },
-];
+const CONFIANCA_OPCOES = [0, 70, 90, 100];
 const EMPTY_FILTERS = { tipos: [], status: [], confiancaMin: 0 };
 const NO_OVERRIDES = {};
+const NO_IMPORTED = [];
+
+function rotulo(prefixo, mapa, valor, t) {
+  if (prefixo === 'doc.t' && valor === 'Outro') return t('imp.t.outro');
+  const key = mapa[valor];
+  return key ? t(`${prefixo}.${key}`) : valor;
+}
+
+function formatarData(texto, locale) {
+  const partes = String(texto).split('/').map(Number);
+  if (partes.length !== 3 || partes.some(Number.isNaN)) return texto;
+  const [d, m, y] = partes;
+  return new Date(y, m - 1, d).toLocaleDateString(locale);
+}
+
 function StatusBadge({ status }) {
+  const { t } = usePreferences();
+  const styles = useThemedStyles(createStyles);
   const variants = {
     'Revisão': [styles.badgeRevisao, styles.badgeRevisaoText],
     'Conclusão': [styles.badgeConclusao, styles.badgeConclusaoText],
-    'Erro': [styles.badgeErro, styles.badgeErroText],
+    Erro: [styles.badgeErro, styles.badgeErroText],
   };
   const [badgeStyle, textStyle] = variants[status] || variants['Revisão'];
   return (
     <View style={[styles.badge, badgeStyle]}>
-      <Text style={[styles.badgeText, textStyle]}>{status}</Text>
+      <Text style={[styles.badgeText, textStyle]}>{rotulo('doc.s', STATUS_KEYS, status, t)}</Text>
     </View>
   );
 }
+
 function ConfidenceRing({ value, size = 15, stroke = 2.5 }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const pct = Math.max(0, Math.min(100, value));
@@ -65,12 +109,12 @@ function ConfidenceRing({ value, size = 15, stroke = 2.5 }) {
   const center = size / 2;
   return (
     <Svg width={size} height={size} style={styles.ring}>
-      <Circle cx={center} cy={center} r={radius} stroke={docColors.rowLine} strokeWidth={stroke} fill="none" />
+      <Circle cx={center} cy={center} r={radius} stroke={colors.divider} strokeWidth={stroke} fill="none" />
       <Circle
         cx={center}
         cy={center}
         r={radius}
-        stroke={docColors.sidebar}
+        stroke={colors.accent}
         strokeWidth={stroke}
         fill="none"
         strokeDasharray={`${circumference} ${circumference}`}
@@ -82,17 +126,21 @@ function ConfidenceRing({ value, size = 15, stroke = 2.5 }) {
     </Svg>
   );
 }
+
 function DocumentRow({ doc, onActions }) {
+  const { colors, t, language } = usePreferences();
+  const styles = useThemedStyles(createStyles);
+  const locale = LOCALES[language] || 'pt-BR';
   return (
     <Pressable style={({ hovered }) => [styles.row, hovered && styles.rowHover]}>
       <View style={[styles.cell, styles.cellDoc]}>
         <View style={styles.cellDocInner}>
-          <Ionicons name="document-text-outline" size={12} color={docColors.sidebar} style={styles.fileIcon} />
+          <Ionicons name="document-text-outline" size={12} color={colors.text} style={styles.fileIcon} />
           <Text style={[styles.cellText, styles.cellDocText]} numberOfLines={1}>{doc.nome}</Text>
         </View>
       </View>
       <View style={[styles.cell, styles.cellTipo]}>
-        <Text style={styles.cellText}>{doc.tipo}</Text>
+        <Text style={styles.cellText}>{rotulo('doc.t', TIPO_KEYS, doc.tipo, t)}</Text>
       </View>
       <View style={[styles.cell, styles.cellStatus]}>
         <StatusBadge status={doc.status} />
@@ -104,83 +152,116 @@ function DocumentRow({ doc, onActions }) {
         </View>
       </View>
       <View style={[styles.cell, styles.cellData]}>
-        <Text style={styles.cellText}>{doc.data}</Text>
+        <Text style={styles.cellText}>{formatarData(doc.data, locale)}</Text>
       </View>
       <View style={[styles.cell, styles.cellAcoes, styles.cellLast]}>
-        <Pressable onPress={(e) => onActions(doc, e.nativeEvent)} accessibilityLabel="Ações">
-          <Ionicons name="ellipsis-horizontal" size={20} color={docColors.sidebar} />
+        <Pressable onPress={(e) => onActions(doc, e.nativeEvent)} accessibilityLabel={t('doc.col.acoes')}>
+          <Ionicons name="ellipsis-horizontal" size={20} color={colors.text} />
         </Pressable>
       </View>
     </Pressable>
   );
 }
+
 function FilterChip({ label, selected, onPress }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected]} accessibilityRole="button">
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
     </Pressable>
   );
 }
+
 export default function CentralDeDocumentos({
   activeMenu = 'documentos',
   onNavigate,
   onAddDocument,
   onOpenValidation,
   onOpenAnalysis,
-  overrides = NO_OVERRIDES, // alterações salvas por id de documento (ex.: vindas da tela de análise)
+  overrides = NO_OVERRIDES,
+  documentosImportados = NO_IMPORTED,
 }) {
+  const { colors, t } = usePreferences();
+  const styles = useThemedStyles(createStyles);
+
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [draft, setDraft] = useState(EMPTY_FILTERS);
   const [filterOpen, setFilterOpen] = useState(false);
   const [actionMenu, setActionMenu] = useState(null);
+
   const activeFiltersCount = filters.tipos.length + filters.status.length + (filters.confiancaMin > 0 ? 1 : 0);
+
+  const totalImportados = documentosImportados.length;
+  useEffect(() => {
+    if (totalImportados === 0) return;
+    setSearch('');
+    setFilters(EMPTY_FILTERS);
+    setPage(1);
+  }, [totalImportados]);
+
   const documents = useMemo(
-    () => DOCUMENTS.map((d) => (overrides[d.id] ? { ...d, ...overrides[d.id] } : d)),
-    [overrides]
+    () =>
+      [...documentosImportados, ...DOCUMENTS].map((d) =>
+        overrides[d.id] ? { ...d, ...overrides[d.id] } : d
+      ),
+    [overrides, documentosImportados]
   );
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return documents.filter((d) => {
-      if (term && !(d.nome.toLowerCase().includes(term) || d.tipo.toLowerCase().includes(term) || d.status.toLowerCase().includes(term))) return false;
+      if (term) {
+        const tipoLabel = rotulo('doc.t', TIPO_KEYS, d.tipo, t).toLowerCase();
+        const statusLabel = rotulo('doc.s', STATUS_KEYS, d.status, t).toLowerCase();
+        if (!(d.nome.toLowerCase().includes(term) || tipoLabel.includes(term) || statusLabel.includes(term))) return false;
+      }
       if (filters.tipos.length && !filters.tipos.includes(d.tipo)) return false;
       if (filters.status.length && !filters.status.includes(d.status)) return false;
       if (d.confianca < filters.confiancaMin) return false;
       return true;
     });
-  }, [search, filters, documents]);
+  }, [search, filters, documents, t]);
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   function handleNavigate(key) {
     if (onNavigate) onNavigate(key);
   }
+
   function handleSearch(text) {
     setSearch(text);
     setPage(1);
   }
+
   function openFilter() {
     setDraft(filters);
     setFilterOpen(true);
   }
+
   function toggleDraft(field, value) {
     setDraft((prev) => ({
       ...prev,
       [field]: prev[field].includes(value) ? prev[field].filter((v) => v !== value) : [...prev[field], value],
     }));
   }
+
   function applyFilters() {
     setFilters(draft);
     setPage(1);
     setFilterOpen(false);
   }
+
   function clearFilters() {
     setDraft(EMPTY_FILTERS);
     setFilters(EMPTY_FILTERS);
     setPage(1);
     setFilterOpen(false);
   }
+
   function openActions(doc, nativeEvent) {
     const { width } = Dimensions.get('window');
     const menuWidth = 200;
@@ -189,92 +270,105 @@ export default function CentralDeDocumentos({
     const left = Math.max(8, Math.min(pageX - menuWidth, width - menuWidth - 8));
     setActionMenu({ doc, top: pageY + 12, left });
   }
+
   function closeActions() {
     setActionMenu(null);
   }
+
   function handleValidation() {
     const doc = actionMenu?.doc;
     closeActions();
     if (onOpenValidation) onOpenValidation(doc);
   }
+
   function handleAnalysis() {
     const doc = actionMenu?.doc;
     closeActions();
     if (onOpenAnalysis) onOpenAnalysis(doc);
   }
+
   return (
     <View style={styles.container}>
       <MenuGlobal activeMenu={activeMenu} onNavigate={handleNavigate} />
+
       <ScrollView style={styles.main} contentContainerStyle={styles.mainContent} showsVerticalScrollIndicator={false}>
         <View style={styles.titleRow}>
-          <Ionicons name="folder-open-outline" size={32} color={docColors.sidebar} style={styles.titleIcon} />
-          <Text style={styles.title}>Central de Documentos</Text>
+          <Ionicons name="folder-open-outline" size={32} color={colors.text} style={styles.titleIcon} />
+          <Text style={styles.title}>{t('doc.titulo')}</Text>
         </View>
-        <Text style={styles.subtitle}>Gerencie todos os documentos processados</Text>
+        <Text style={styles.subtitle}>{t('doc.subtitulo')}</Text>
+
         <View style={styles.toolbar}>
           <View style={styles.searchBox}>
-            <Ionicons name="search" size={18} color={docColors.sidebar} />
+            <Ionicons name="search" size={18} color={colors.text} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Pesquisar documentos..."
-              placeholderTextColor={docColors.sidebar}
+              placeholder={t('doc.pesquisar')}
+              placeholderTextColor={colors.textMuted}
               value={search}
               onChangeText={handleSearch}
             />
           </View>
-          <Pressable style={styles.filterButton} onPress={openFilter} accessibilityRole="button" accessibilityLabel="Filtrar">
-            <Ionicons name="funnel-outline" size={20} color={docColors.sidebar} />
+
+          <Pressable style={styles.filterButton} onPress={openFilter} accessibilityRole="button" accessibilityLabel={t('doc.filtrar')}>
+            <Ionicons name="funnel-outline" size={20} color={colors.text} />
             {activeFiltersCount > 0 && (
               <View style={styles.filterBadge}>
                 <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
               </View>
             )}
           </Pressable>
+
           <Pressable
             onPress={onAddDocument}
             accessibilityRole="button"
-            accessibilityLabel="Adicionar documento"
+            accessibilityLabel={t('doc.adicionar')}
             style={({ hovered }) => [styles.addButton, hovered && styles.addButtonHover]}
           >
-            <Ionicons name="add" size={24} color={colors.white} />
+            <Ionicons name="add" size={24} color={colors.onPrimary} />
           </Pressable>
         </View>
+
         <View style={styles.card}>
           <View style={styles.tableHeader}>
             <View style={styles.cellDoc}>
-              <Text style={[styles.headerText, styles.headerTextSmall]}>Documento</Text>
+              <Text style={[styles.headerText, styles.headerTextSmall]}>{t('doc.col.documento')}</Text>
             </View>
             <View style={styles.cellTipo}>
-              <Text style={styles.headerText}>Tipo</Text>
+              <Text style={styles.headerText}>{t('doc.col.tipo')}</Text>
             </View>
             <View style={styles.cellStatus}>
-              <Text style={styles.headerText}>Status</Text>
+              <Text style={styles.headerText}>{t('doc.col.status')}</Text>
             </View>
             <View style={styles.cellConfianca}>
-              <Text style={styles.headerText}>Confiança</Text>
+              <Text style={styles.headerText}>{t('doc.col.confianca')}</Text>
             </View>
             <View style={styles.cellData}>
-              <Text style={styles.headerText}>Data</Text>
+              <Text style={styles.headerText}>{t('doc.col.data')}</Text>
             </View>
             <View style={styles.cellAcoes}>
-              <Text style={styles.headerText}>Ações</Text>
+              <Text style={styles.headerText}>{t('doc.col.acoes')}</Text>
             </View>
           </View>
+
           {visible.length === 0 ? (
-            <Text style={styles.emptyText}>Nenhum documento encontrado.</Text>
+            <Text style={styles.emptyText}>{t('doc.vazio')}</Text>
           ) : (
             visible.map((doc) => <DocumentRow key={doc.id} doc={doc} onActions={openActions} />)
           )}
+
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Mostrando {visible.length} de {filtered.length} documentos</Text>
+            <Text style={styles.footerText}>
+              {t('doc.mostrando').replace('{a}', String(visible.length)).replace('{b}', String(filtered.length))}
+            </Text>
             <View style={styles.pagination}>
               <Pressable
                 onPress={() => setPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
                 style={[styles.pageButton, currentPage === 1 && styles.pageButtonDisabled]}
-                accessibilityLabel="Página anterior"
+                accessibilityLabel={t('doc.anterior')}
               >
-                <Ionicons name="caret-back" size={11} color={docColors.sidebar} />
+                <Ionicons name="caret-back" size={11} color={colors.text} />
               </Pressable>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
                 <Pressable key={n} onPress={() => setPage(n)} style={[styles.pageButton, n === currentPage && styles.pageButtonActive]}>
@@ -285,69 +379,85 @@ export default function CentralDeDocumentos({
                 onPress={() => setPage(Math.min(totalPages, currentPage + 1))}
                 disabled={currentPage === totalPages}
                 style={[styles.pageButton, currentPage === totalPages && styles.pageButtonDisabled]}
-                accessibilityLabel="Próxima página"
+                accessibilityLabel={t('doc.proxima')}
               >
-                <Ionicons name="caret-forward" size={11} color={docColors.sidebar} />
+                <Ionicons name="caret-forward" size={11} color={colors.text} />
               </Pressable>
             </View>
           </View>
         </View>
       </ScrollView>
+
       <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
         <Pressable style={styles.filterOverlay} onPress={() => setFilterOpen(false)}>
           <Pressable style={styles.filterPanel} onPress={() => {}}>
             <View style={styles.filterHeader}>
-              <Text style={styles.filterTitle}>Filtrar documentos</Text>
-              <Pressable onPress={() => setFilterOpen(false)} accessibilityLabel="Fechar">
-                <Ionicons name="close" size={20} color={docColors.sidebar} />
+              <Text style={styles.filterTitle}>{t('doc.filtrarTitulo')}</Text>
+              <Pressable onPress={() => setFilterOpen(false)} accessibilityLabel={t('perfil.fechar')}>
+                <Ionicons name="close" size={20} color={colors.text} />
               </Pressable>
             </View>
-            <Text style={styles.filterLabel}>Tipo</Text>
+
+            <Text style={styles.filterLabel}>{t('doc.fTipo')}</Text>
             <View style={styles.chipsRow}>
-              {TIPOS.map((t) => (
-                <FilterChip key={t} label={t} selected={draft.tipos.includes(t)} onPress={() => toggleDraft('tipos', t)} />
-              ))}
-            </View>
-            <Text style={styles.filterLabel}>Status</Text>
-            <View style={styles.chipsRow}>
-              {STATUS.map((s) => (
-                <FilterChip key={s} label={s} selected={draft.status.includes(s)} onPress={() => toggleDraft('status', s)} />
-              ))}
-            </View>
-            <Text style={styles.filterLabel}>Confiança mínima</Text>
-            <View style={styles.chipsRow}>
-              {CONFIANCA_OPCOES.map((o) => (
+              {TIPOS.map((tp) => (
                 <FilterChip
-                  key={o.value}
-                  label={o.label}
-                  selected={draft.confiancaMin === o.value}
-                  onPress={() => setDraft((prev) => ({ ...prev, confiancaMin: o.value }))}
+                  key={tp}
+                  label={rotulo('doc.t', TIPO_KEYS, tp, t)}
+                  selected={draft.tipos.includes(tp)}
+                  onPress={() => toggleDraft('tipos', tp)}
                 />
               ))}
             </View>
+
+            <Text style={styles.filterLabel}>{t('doc.fStatus')}</Text>
+            <View style={styles.chipsRow}>
+              {STATUS.map((s) => (
+                <FilterChip
+                  key={s}
+                  label={rotulo('doc.s', STATUS_KEYS, s, t)}
+                  selected={draft.status.includes(s)}
+                  onPress={() => toggleDraft('status', s)}
+                />
+              ))}
+            </View>
+
+            <Text style={styles.filterLabel}>{t('doc.fConfianca')}</Text>
+            <View style={styles.chipsRow}>
+              {CONFIANCA_OPCOES.map((v) => (
+                <FilterChip
+                  key={v}
+                  label={v === 0 ? t('doc.todas') : v === 100 ? '100%' : `${v}%+`}
+                  selected={draft.confiancaMin === v}
+                  onPress={() => setDraft((prev) => ({ ...prev, confiancaMin: v }))}
+                />
+              ))}
+            </View>
+
             <View style={styles.filterActions}>
               <Pressable style={styles.filterClear} onPress={clearFilters}>
-                <Text style={styles.filterClearText}>Limpar</Text>
+                <Text style={styles.filterClearText}>{t('dash.limpar')}</Text>
               </Pressable>
               <Pressable style={styles.filterApply} onPress={applyFilters}>
-                <Text style={styles.filterApplyText}>Aplicar</Text>
+                <Text style={styles.filterApplyText}>{t('dash.aplicar')}</Text>
               </Pressable>
             </View>
           </Pressable>
         </Pressable>
       </Modal>
+
       <Modal visible={!!actionMenu} transparent animationType="fade" onRequestClose={closeActions}>
         <Pressable style={styles.menuOverlay} onPress={closeActions}>
           {actionMenu && (
             <View style={[styles.actionMenu, { top: actionMenu.top, left: actionMenu.left }]}>
               <Pressable onPress={handleValidation} style={({ hovered }) => [styles.actionItem, hovered && styles.rowHover]}>
-                <Ionicons name="checkmark-circle-outline" size={16} color={docColors.sidebar} />
-                <Text style={styles.actionText}>Central de validação</Text>
+                <Ionicons name="checkmark-circle-outline" size={16} color={colors.text} />
+                <Text style={styles.actionText}>{t('doc.menuValidacao')}</Text>
               </Pressable>
               <View style={styles.actionDivider} />
               <Pressable onPress={handleAnalysis} style={({ hovered }) => [styles.actionItem, hovered && styles.rowHover]}>
-                <Ionicons name="analytics-outline" size={16} color={docColors.sidebar} />
-                <Text style={styles.actionText}>Análise de documento</Text>
+                <Ionicons name="analytics-outline" size={16} color={colors.text} />
+                <Text style={styles.actionText}>{t('doc.menuAnalise')}</Text>
               </Pressable>
             </View>
           )}

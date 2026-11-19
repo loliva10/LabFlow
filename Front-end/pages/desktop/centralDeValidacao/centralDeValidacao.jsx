@@ -1,12 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { usePreferences, useThemedStyles } from '../../../context/PreferencesContext';
 import MenuGlobal from '../../../components/MenuGlobal/MenuGlobal';
-import { styles as docStyles, docColors } from '../centralDeDocumentos/centralDeDocumentosStyle';
 import { DocumentViewer } from '../analiseDeDocumentos/analiseDeDocumentos';
-import styles from './centralDeValidacaoStyle';
+import { createStyles } from './centralDeValidacaoStyle';
 
-const COR = '#174847';
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 300;
 const ZOOM_STEP = 25;
@@ -31,6 +30,8 @@ const CAMPOS = [
 ];
 
 function CampoLinha({ campo, valor, editando, onChange, ultimo }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
   const nivel = campo.confianca >= 100 ? 'alta' : campo.confianca >= 80 ? 'media' : 'baixa';
   const badgeStyle = [styles.badgeConf, styles[`badgeConf_${nivel}`]];
   const textStyle = [styles.badgeConfTexto, styles[`badgeConfTexto_${nivel}`]];
@@ -38,7 +39,7 @@ function CampoLinha({ campo, valor, editando, onChange, ultimo }) {
   return (
     <View style={[styles.campo, !ultimo && styles.campoLinha]}>
       <View style={styles.campoIcone}>
-        <Ionicons name={campo.icon} size={22} color="#E8F4F3" />
+        <Ionicons name={campo.icon} size={22} color={colors.onPrimary} />
       </View>
       <View style={styles.campoTextos}>
         <Text style={styles.campoLabel}>{campo.label}</Text>
@@ -64,6 +65,8 @@ export default function CentralDeValidacao({
   onSave,
   onDelete,
 }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
   const base = doc || SAMPLE_DOC;
 
   const [valores, setValores] = useState({
@@ -112,35 +115,39 @@ export default function CentralDeValidacao({
   };
 
   const statusEstilo =
-    status === 'Conclusão' ? styles.statusConclusao : status === 'Erro' ? styles.statusErro : styles.statusRevisao;
+    status === 'Conclusão'
+      ? [styles.statusConclusao, styles.statusConclusaoTexto]
+      : status === 'Erro'
+        ? [styles.statusErro, styles.statusErroTexto]
+        : [styles.statusRevisao, styles.statusRevisaoTexto];
 
   return (
     <View style={styles.container}>
       <MenuGlobal activeMenu={activeMenu} onNavigate={onNavigate} />
-      <ScrollView style={docStyles.main} contentContainerStyle={docStyles.mainContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.main} contentContainerStyle={styles.mainContent} showsVerticalScrollIndicator={false}>
         <Pressable
           style={({ hovered }) => [styles.botaoVoltar, hovered && styles.botaoVoltarHover]}
           onPress={onBack}
           accessibilityLabel="Voltar"
         >
-          <Ionicons name="arrow-back-outline" size={18} color="#FFFFFF" />
+          <Ionicons name="arrow-back-outline" size={18} color={colors.onPrimary} />
         </Pressable>
 
-        <View style={docStyles.titleRow}>
-          <Ionicons name="shield-checkmark-outline" size={32} color={docColors.sidebar} style={docStyles.titleIcon} />
-          <Text style={docStyles.title}>Central de Validação</Text>
+        <View style={styles.titleRow}>
+          <Ionicons name="shield-checkmark-outline" size={32} color={colors.text} style={styles.titleIcon} />
+          <Text style={styles.title}>Central de Validação</Text>
         </View>
-        <Text style={docStyles.subtitle}>Revise e aprove as informações extraídas pela IA.</Text>
+        <Text style={styles.subtitle}>Revise e aprove as informações extraídas pela IA.</Text>
 
         <View style={styles.card}>
           <View style={styles.cardCabecalho}>
-            <Ionicons name="document-text-outline" size={34} color={COR} />
+            <Ionicons name="document-text-outline" size={34} color={colors.text} />
             <View style={styles.cardCabecalhoTextos}>
               <Text style={styles.docNome}>{nome}</Text>
               <Text style={styles.docSub}>{`${tipo} • ${data} • ${valores.empresa}`}</Text>
             </View>
-            <View style={[styles.status, statusEstilo]}>
-              <Text style={styles.statusTexto}>{status}</Text>
+            <View style={[styles.status, statusEstilo[0]]}>
+              <Text style={[styles.statusTexto, statusEstilo[1]]}>{status}</Text>
             </View>
           </View>
 
@@ -155,14 +162,14 @@ export default function CentralDeValidacao({
               />
 
               <View style={styles.barraZoom}>
-                <Ionicons name="search-outline" size={22} color="#FFFFFF" />
+                <Ionicons name="search-outline" size={22} color={colors.onPrimary} />
                 <View style={styles.zoomControles}>
                   <Pressable
                     onPress={() => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
                     style={styles.zoomBotao}
                     accessibilityLabel="Diminuir zoom"
                   >
-                    <Ionicons name="remove-outline" size={16} color="#FFFFFF" />
+                    <Ionicons name="remove-outline" size={16} color={colors.onPrimary} />
                   </Pressable>
                   <Pressable onPress={() => setZoom(100)} accessibilityLabel="Voltar o zoom para 100%">
                     <Text style={styles.zoomTexto}>{zoom}%</Text>
@@ -172,11 +179,11 @@ export default function CentralDeValidacao({
                     style={styles.zoomBotao}
                     accessibilityLabel="Aumentar zoom"
                   >
-                    <Ionicons name="add-outline" size={16} color="#FFFFFF" />
+                    <Ionicons name="add-outline" size={16} color={colors.onPrimary} />
                   </Pressable>
                 </View>
                 <Pressable onPress={() => setTela(true)} accessibilityLabel="Tela cheia">
-                  <Ionicons name="expand-outline" size={22} color="#FFFFFF" />
+                  <Ionicons name="expand-outline" size={22} color={colors.onPrimary} />
                 </Pressable>
               </View>
 
@@ -185,18 +192,18 @@ export default function CentralDeValidacao({
                   onPress={() => setEditando(!editando)}
                   style={({ hovered }) => [styles.acao, (hovered || editando) && styles.acaoAtiva]}
                 >
-                  <Ionicons name="create-outline" size={16} color="#6B1010" />
+                  <Ionicons name="create-outline" size={16} color={colors.cta} />
                   <Text style={styles.acaoTexto}>Editar</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setConfirmarExclusao(true)}
                   style={({ hovered }) => [styles.acao, hovered && styles.acaoAtiva]}
                 >
-                  <Ionicons name="trash-outline" size={16} color="#6B1010" />
+                  <Ionicons name="trash-outline" size={16} color={colors.cta} />
                   <Text style={styles.acaoTexto}>Deletar</Text>
                 </Pressable>
                 <Pressable onPress={salvar} style={({ hovered }) => [styles.acao, hovered && styles.acaoAtiva]}>
-                  <Ionicons name="save-outline" size={16} color="#6B1010" />
+                  <Ionicons name="save-outline" size={16} color={colors.cta} />
                   <Text style={styles.acaoTexto}>Salvar</Text>
                 </Pressable>
               </View>
@@ -204,7 +211,7 @@ export default function CentralDeValidacao({
 
             <View style={styles.painel}>
               <View style={styles.painelTitulo}>
-                <Ionicons name="information-circle-outline" size={28} color="#FFFFFF" />
+                <Ionicons name="information-circle-outline" size={28} color={colors.onPrimary} />
                 <Text style={styles.painelTituloTexto}>Informações Extraídas</Text>
               </View>
 
@@ -215,7 +222,7 @@ export default function CentralDeValidacao({
                     campo={campo}
                     valor={valores[campo.key]}
                     editando={editando}
-                    onChange={(t) => atualizar(campo.key, t)}
+                    onChange={(texto) => atualizar(campo.key, texto)}
                     ultimo={i === CAMPOS.length - 1}
                   />
                 ))}
@@ -224,7 +231,7 @@ export default function CentralDeValidacao({
               {baixas.length > 0 && (
                 <View style={styles.atencao}>
                   <View style={styles.atencaoTitulo}>
-                    <Ionicons name="alert-circle-outline" size={24} color={COR} />
+                    <Ionicons name="alert-circle-outline" size={24} color={colors.text} />
                     <Text style={styles.atencaoTituloTexto}>Atenção</Text>
                   </View>
                   {baixas.map((c) => (
@@ -245,7 +252,7 @@ export default function CentralDeValidacao({
             <View style={styles.telaCheiaCabecalho}>
               <Text style={styles.telaCheiaNome} numberOfLines={1}>{nome}</Text>
               <Pressable onPress={() => setTela(false)} accessibilityLabel="Fechar">
-                <Ionicons name="close" size={22} color="#FFFFFF" />
+                <Ionicons name="close" size={22} color={colors.onPrimary} />
               </Pressable>
             </View>
             <View style={styles.telaCheiaCorpo}>
@@ -264,7 +271,7 @@ export default function CentralDeValidacao({
       <Modal visible={confirmarExclusao} transparent animationType="fade" onRequestClose={() => setConfirmarExclusao(false)}>
         <Pressable style={styles.overlay} onPress={() => setConfirmarExclusao(false)}>
           <Pressable style={styles.confirmacao} onPress={() => {}}>
-            <Ionicons name="trash-outline" size={32} color="#6B1010" />
+            <Ionicons name="trash-outline" size={32} color={colors.cta} />
             <Text style={styles.confirmacaoTitulo}>Deletar documento?</Text>
             <Text style={styles.confirmacaoTexto}>{`${nome} será removido. Essa ação não pode ser desfeita.`}</Text>
             <View style={styles.confirmacaoAcoes}>

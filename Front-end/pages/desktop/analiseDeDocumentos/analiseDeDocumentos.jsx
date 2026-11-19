@@ -12,14 +12,9 @@ import {
 import Svg, { Circle, SvgXml } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 
+import { usePreferences, useThemedStyles } from '../../../context/PreferencesContext';
 import MenuGlobal from '../../../components/MenuGlobal/MenuGlobal';
-import {
-  styles,
-  docColors,
-  accent,
-  progressColor,
-  processingColor,
-} from './analiseDeDocumentosStyle';
+import { createStyles } from './analiseDeDocumentosStyle';
 import {
   PAGE_RATIO,
   buildChecks,
@@ -44,13 +39,6 @@ const SAMPLE_CHECKS = [
   { key: 'consistencia', label: 'Consistência dos dados', description: 'Dados coerentes com o padrão da empresa', value: 80, ok: true },
 ];
 
-const TONES = {
-  done: { bg: docColors.conclusaoBg, color: docColors.conclusaoText },
-  review: { bg: docColors.revisaoBg, color: docColors.revisaoText },
-  error: { bg: docColors.erroBg, color: docColors.erroText },
-  processing: { bg: processingColor, color: '#FFFFFF' },
-};
-
 const FIELDS = [
   { key: 'nome', label: 'Documento' },
   { key: 'tipo', label: 'Tipo' },
@@ -61,6 +49,15 @@ const FIELDS = [
 const ZOOM_MIN = 50;
 const ZOOM_MAX = 300;
 const ZOOM_STEP = 25;
+
+function buildTones(colors) {
+  return {
+    done: { bg: colors.successBg, color: colors.success },
+    review: { bg: colors.warningBg, color: colors.warning },
+    error: { bg: colors.dangerBg, color: colors.danger },
+    processing: { bg: colors.warning, color: '#FFFFFF' },
+  };
+}
 
 function initialValues(d) {
   return {
@@ -87,6 +84,8 @@ function isValidDate(text) {
 }
 
 function ProgressRing({ value, size = 130, stroke = 14 }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const pct = Math.max(0, Math.min(100, value));
@@ -95,12 +94,12 @@ function ProgressRing({ value, size = 130, stroke = 14 }) {
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size}>
-        <Circle cx={center} cy={center} r={radius} stroke="#8E8E8E" strokeWidth={stroke} fill="none" />
+        <Circle cx={center} cy={center} r={radius} stroke={colors.switchOff} strokeWidth={stroke} fill="none" />
         <Circle
           cx={center}
           cy={center}
           r={radius}
-          stroke={progressColor}
+          stroke={colors.cta}
           strokeWidth={stroke}
           fill="none"
           strokeDasharray={`${circumference} ${circumference}`}
@@ -117,6 +116,7 @@ function ProgressRing({ value, size = 130, stroke = 14 }) {
 }
 
 export function DocumentViewer({ doc, source, zoom, baseWidth, frameStyle }) {
+  const styles = useThemedStyles(createStyles);
   const [frame, setFrame] = useState({ width: 0, height: 0 });
   const webRef = useRef(null);
 
@@ -213,30 +213,36 @@ export function DocumentViewer({ doc, source, zoom, baseWidth, frameStyle }) {
 }
 
 function SquareButton({ icon, onPress, label }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
   return (
     <Pressable onPress={onPress} style={styles.squareButton} accessibilityRole="button" accessibilityLabel={label}>
-      <Ionicons name={icon} size={24} color="#FFFFFF" />
+      <Ionicons name={icon} size={24} color={colors.onPrimary} />
     </Pressable>
   );
 }
 
 function OutlineButton({ icon, label, onPress }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       style={({ hovered }) => [styles.outlineButton, hovered && styles.outlineButtonHover]}
     >
-      <Ionicons name={icon} size={18} color={accent} />
+      <Ionicons name={icon} size={18} color={colors.cta} />
       <Text style={styles.outlineButtonText}>{label}</Text>
     </Pressable>
   );
 }
 
 function SectionHeader({ icon, title }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.sectionHeader}>
-      <Ionicons name={icon} size={22} color={docColors.sidebar} style={styles.sectionIcon} />
+      <Ionicons name={icon} size={22} color={colors.text} style={styles.sectionIcon} />
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
   );
@@ -251,6 +257,8 @@ export default function AnaliseDeDocumentos({
   onReprocess,
   onSaveAnalysis,
 }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
   const base = doc || SAMPLE_DOC;
 
   const [zoom, setZoom] = useState(100);
@@ -266,7 +274,7 @@ export default function AnaliseDeDocumentos({
   const source = previewSource || base.imagem || null;
 
   const view = getStatusView(base.status);
-  const tone = TONES[view.tone];
+  const tone = buildTones(colors)[view.tone];
   const checks = doc ? buildChecks(doc) : SAMPLE_CHECKS;
 
   function handleNavigate(key) {
@@ -339,11 +347,11 @@ export default function AnaliseDeDocumentos({
 
       <ScrollView style={styles.main} contentContainerStyle={styles.mainContent} showsVerticalScrollIndicator={false}>
         <Pressable onPress={onBack} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Voltar">
-          <Ionicons name="arrow-back" size={18} color="#FFFFFF" />
+          <Ionicons name="arrow-back" size={18} color={colors.onPrimary} />
         </Pressable>
 
         <View style={styles.titleRow}>
-          <Ionicons name="documents-outline" size={32} color={docColors.sidebar} style={styles.titleIcon} />
+          <Ionicons name="documents-outline" size={32} color={colors.text} style={styles.titleIcon} />
           <Text style={styles.title}>Análise de Documentos</Text>
         </View>
         <Text style={styles.subtitle}>Visualize detalhes do documento e a extração de dados.</Text>
@@ -361,7 +369,7 @@ export default function AnaliseDeDocumentos({
             <View style={styles.fileCard}>
               <View style={styles.fileHeader}>
                 <View style={styles.fileHeaderLeft}>
-                  <Ionicons name="document-text-outline" size={26} color="#FFFFFF" />
+                  <Ionicons name="document-text-outline" size={26} color={colors.onPrimary} />
                   <Text style={styles.fileName} numberOfLines={1}>{values.nome || base.nome}</Text>
                 </View>
                 <View style={[styles.statusBadge, { backgroundColor: tone.bg }]}>
@@ -378,20 +386,20 @@ export default function AnaliseDeDocumentos({
               />
 
               <View style={styles.zoomBar}>
-                <Ionicons name="search-outline" size={22} color="#FFFFFF" />
+                <Ionicons name="search-outline" size={22} color={colors.onPrimary} />
                 <View style={styles.zoomControls}>
                   <Pressable onPress={zoomOut} style={styles.zoomButton} accessibilityLabel="Diminuir zoom">
-                    <Ionicons name="remove" size={18} color="#FFFFFF" />
+                    <Ionicons name="remove" size={18} color={colors.onPrimary} />
                   </Pressable>
                   <Pressable onPress={() => setZoom(100)} accessibilityLabel="Voltar o zoom para 100%">
                     <Text style={styles.zoomText}>{zoom}%</Text>
                   </Pressable>
                   <Pressable onPress={zoomIn} style={styles.zoomButton} accessibilityLabel="Aumentar zoom">
-                    <Ionicons name="add" size={18} color="#FFFFFF" />
+                    <Ionicons name="add" size={18} color={colors.onPrimary} />
                   </Pressable>
                 </View>
                 <Pressable onPress={() => setFullscreen(true)} accessibilityLabel="Tela cheia">
-                  <Ionicons name="expand-outline" size={22} color="#FFFFFF" />
+                  <Ionicons name="expand-outline" size={22} color={colors.onPrimary} />
                 </Pressable>
               </View>
 
@@ -427,11 +435,11 @@ export default function AnaliseDeDocumentos({
                         <TextInput
                           style={styles.tableInput}
                           value={values[f.key]}
-                          onChangeText={(t) => changeValue(f.key, t)}
+                          onChangeText={(text) => changeValue(f.key, text)}
                           keyboardType={f.key === 'data' || f.key === 'numero' ? 'numeric' : 'default'}
                           maxLength={f.key === 'data' ? 10 : undefined}
                           placeholder={f.key === 'data' ? 'dd/mm/aaaa' : undefined}
-                          placeholderTextColor={docColors.sidebarLine}
+                          placeholderTextColor={colors.textMuted}
                         />
                       ) : (
                         <Text style={styles.tableValueText}>{values[f.key]}</Text>
@@ -487,7 +495,7 @@ export default function AnaliseDeDocumentos({
             <View style={styles.fullHeader}>
               <Text style={styles.fileName} numberOfLines={1}>{values.nome || base.nome}</Text>
               <Pressable onPress={() => setFullscreen(false)} accessibilityLabel="Fechar">
-                <Ionicons name="close" size={22} color="#FFFFFF" />
+                <Ionicons name="close" size={22} color={colors.onPrimary} />
               </Pressable>
             </View>
             <View style={styles.fullBody}>

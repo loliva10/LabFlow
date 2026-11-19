@@ -1,49 +1,75 @@
 
-import { Platform, StyleSheet } from 'react-native';
-const web = (style) => Platform.select({ web: style, default: {} });
-export const styles = StyleSheet.create({
+import { Platform, StyleSheet } from 'react-native'
+
+const web = (style) => Platform.select({
+  web: style,
+  default: {},
+})
+
+export const createStyles = (c) => StyleSheet.create({
   sidebar: {
     width: 250,
-    backgroundColor: '#1B4D49',
+    backgroundColor: c.menuBg,
     paddingTop: 20,
     paddingBottom: 28,
     paddingHorizontal: 22,
     justifyContent: 'space-between',
+    ...web({
+      minHeight: '100vh',
+    }),
   },
-  sidebarLogo: {
+
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 52,
+  },
+
+  logo: {
     width: 200,
     height: 54,
-    marginBottom: 52,
-    marginLeft: 0,
   },
+
+  menuTop: {
+    flex: 1,
+  },
+
   navItem: {
+    height: 46,
     flexDirection: 'row',
     alignItems: 'center',
-    height: 46,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#5E8B86',
-    ...web({ cursor: 'pointer' }),
+    borderBottomColor: 'rgba(255,255,255,0.25)',
+    ...web({
+      cursor: 'pointer',
+      transition: 'background-color 0.2s ease',
+    }),
   },
-  navItemActive: {  
-    backgroundColor: '#2A6F68',
+
+  navItemActive: {
+    backgroundColor: c.accent,
     borderTopWidth: 1,
-    borderTopColor: '#5E8B86',
+    borderTopColor: 'rgba(255,255,255,0.25)',
   },
+
   navItemHover: {
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
+
   navIcon: {
     width: 28,
-    alignItems: 'center',
     marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+
   navText: {
-    color: '#FFFFFF',
+    color: c.onPrimary,
     fontSize: 18,
     fontWeight: '400',
   },
-  sidebarBottom: {
+
+  menuBottom: {
     marginTop: 24,
   },
-});
+})

@@ -1,18 +1,39 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Modal, Dimensions, Platform, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { fonts } from '../login/LoginStyle';
+import { usePreferences, useThemedStyles } from '../../../context/PreferencesContext';
 import MenuGlobal from '../../../components/MenuGlobal/MenuGlobal';
-import { styles, adminColors } from './administracaoStyle';
+import { createStyles } from './administracaoStyle';
 
 const Swal = Platform.OS === 'web' ? require('sweetalert2').default : null;
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 16;
+const STATUS_OPCOES = ['Ativo', 'Inativo'];
+const EMPTY_FILTERS = { status: [], perfis: [] };
+const EMPTY_LIST = [];
+const SWAL_STYLE_ID = 'swal-custom-font';
 
-const FILTROS = [
-  { key: 'todos', label: 'Todos' },
-  { key: 'ativos', label: 'Ativos' },
-  { key: 'inativos', label: 'Inativos' },
-];
+function ensureSwalFont() {
+  if (typeof document === 'undefined' || document.getElementById(SWAL_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = SWAL_STYLE_ID;
+  style.textContent = `
+    .swal2-popup,
+    .swal2-title,
+    .swal2-html-container,
+    .swal2-styled {
+      font-family: '${fonts.regular}', sans-serif !important;
+    }
+    .swal2-title {
+      font-weight: 400 !important;
+    }
+    .swal2-styled {
+      font-weight: 400 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 function getPageNumbers(current, total) {
   const maxVisible = 5;
@@ -24,37 +45,71 @@ function getPageNumbers(current, total) {
   return pages;
 }
 
+function FilterChip({ label, selected, onPress }) {
+  const styles = useThemedStyles(createStyles);
+  return (
+    <Pressable onPress={onPress} style={[styles.chip, selected && styles.chipSelected]} accessibilityRole="button">
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function UserRow({ usuario, onActions }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
+  return (
+    <Pressable style={({ hovered }) => [styles.row, hovered && styles.rowHover]}>
+      <View style={[styles.cell, styles.cellNome]}>
+        <View style={styles.cellNomeInner}>
+          <View style={[styles.statusDot, usuario.ativo ? styles.dotActive : styles.dotInactive]} />
+          <Text style={[styles.cellText, styles.cellNomeText]} numberOfLines={1}>{usuario.nome}</Text>
+        </View>
+      </View>
+      <View style={[styles.cell, styles.cellEmail]}>
+        <Text style={styles.cellText} numberOfLines={1}>{usuario.email}</Text>
+      </View>
+      <View style={[styles.cell, styles.cellPerfil]}>
+        <Text style={styles.cellText} numberOfLines={1}>{usuario.perfil}</Text>
+      </View>
+      <View style={[styles.cell, styles.cellCargo]}>
+        <Text style={styles.cellText} numberOfLines={1}>{usuario.cargo}</Text>
+      </View>
+      <View style={[styles.cell, styles.cellAcoes, styles.cellLast]}>
+        <Pressable onPress={(e) => onActions(usuario, e.nativeEvent)} accessibilityLabel="Ações do usuário">
+          <Ionicons name="ellipsis-horizontal" size={20} color={colors.text} />
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+}
+
 export default function Administracao({
-  activeMenu,
+  activeMenu = 'administracao',
   onNavigate,
-  usuarios,
+  usuarios = EMPTY_LIST,
   onAddUser,
   onEditUser,
   onDeleteUser,
 }) {
-  const [search, setSearch] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
-  const [filtro, setFiltro] = useState('todos');
-  const [page, setPage] = useState(1);
-  const [openMenuId, setOpenMenuId] = useState(null);
-  const [hoveredRow, setHoveredRow] = useState(null);
-  const [hoveredItem, setHoveredItem] = useState(null);
-  const [addHover, setAddHover] = useState(false);
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
 
-  const counts = useMemo(() => {
-    const ativos = usuarios.filter((u) => u.ativo).length;
-    return {
-      todos: usuarios.length,
-      ativos,
-      inativos: usuarios.length - ativos,
-    };
-  }, [usuarios]);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [draft, setDraft] = useState(EMPTY_FILTERS);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [actionMenu, setActionMenu] = useState(null);
+
+  const perfis = useMemo(() => [...new Set(usuarios.map((u) => u.perfil))], [usuarios]);
+
+  const activeFiltersCount = filters.status.length + filters.perfis.length;
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return usuarios.filter((u) => {
-      if (filtro === 'ativos' && !u.ativo) return false;
-      if (filtro === 'inativos' && u.ativo) return false;
+      if (filters.status.length && !filters.status.includes(u.ativo ? 'Ativo' : 'Inativo')) return false;
+      if (filters.perfis.length && !filters.perfis.includes(u.perfil)) return false;
       if (!term) return true;
       return (
         u.nome.toLowerCase().includes(term) ||
@@ -63,7 +118,7 @@ export default function Administracao({
         u.cargo.toLowerCase().includes(term)
       );
     });
-  }, [usuarios, search, filtro]);
+  }, [usuarios, search, filters]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -73,49 +128,86 @@ export default function Administracao({
   function handleSearch(text) {
     setSearch(text);
     setPage(1);
-    setOpenMenuId(null);
   }
 
-  function handleFiltro(key) {
-    setFiltro(key);
+  function openFilter() {
+    setDraft(filters);
+    setFilterOpen(true);
+  }
+
+  function toggleDraft(field, value) {
+    setDraft((prev) => ({
+      ...prev,
+      [field]: prev[field].includes(value) ? prev[field].filter((v) => v !== value) : [...prev[field], value],
+    }));
+  }
+
+  function applyFilters() {
+    setFilters(draft);
     setPage(1);
-    setOpenMenuId(null);
+    setFilterOpen(false);
+  }
+
+  function clearFilters() {
+    setDraft(EMPTY_FILTERS);
+    setFilters(EMPTY_FILTERS);
+    setPage(1);
+    setFilterOpen(false);
   }
 
   function goToPage(number) {
     if (number < 1 || number > totalPages) return;
     setPage(number);
-    setOpenMenuId(null);
   }
 
-  function handleEdit(usuario) {
-    setOpenMenuId(null);
-    onEditUser(usuario);
+  function openActions(usuario, nativeEvent) {
+    const { width } = Dimensions.get('window');
+    const menuWidth = 200;
+    const pageX = nativeEvent?.pageX ?? width / 2;
+    const pageY = nativeEvent?.pageY ?? 200;
+    const left = Math.max(8, Math.min(pageX - menuWidth, width - menuWidth - 8));
+    setActionMenu({ usuario, top: pageY + 12, left });
   }
 
-  function handleDelete(usuario) {
-    setOpenMenuId(null);
+  function closeActions() {
+    setActionMenu(null);
+  }
+
+  function handleEdit() {
+    const usuario = actionMenu?.usuario;
+    closeActions();
+    if (usuario && onEditUser) onEditUser(usuario);
+  }
+
+  function handleDelete() {
+    const usuario = actionMenu?.usuario;
+    closeActions();
+    if (!usuario) return;
 
     if (Swal) {
+      ensureSwalFont();
       Swal.fire({
         title: 'Deseja excluir?',
         icon: 'warning',
+        iconColor: colors.text,
+        background: colors.card,
+        color: colors.text,
         showCancelButton: true,
         confirmButtonText: 'Sim',
         cancelButtonText: 'Não',
         reverseButtons: true,
         focusCancel: true,
-        confirmButtonColor: adminColors.danger,
-        cancelButtonColor: adminColors.cancel,
+        confirmButtonColor: colors.cta,
+        cancelButtonColor: colors.primary,
       }).then((result) => {
-        if (result.isConfirmed) onDeleteUser(usuario.id);
+        if (result.isConfirmed && onDeleteUser) onDeleteUser(usuario.id);
       });
       return;
     }
 
     Alert.alert('Deseja excluir?', '', [
       { text: 'Não', style: 'cancel' },
-      { text: 'Sim', style: 'destructive', onPress: () => onDeleteUser(usuario.id) },
+      { text: 'Sim', style: 'destructive', onPress: () => onDeleteUser && onDeleteUser(usuario.id) },
     ]);
   }
 
@@ -123,220 +215,148 @@ export default function Administracao({
     <View style={styles.container}>
       <MenuGlobal activeMenu={activeMenu} onNavigate={onNavigate} />
 
-      <View style={styles.main}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          {openMenuId !== null && (
-            <Pressable style={styles.overlay} onPress={() => setOpenMenuId(null)} />
-          )}
+      <ScrollView style={styles.main} contentContainerStyle={styles.mainContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.titleRow}>
+          <Ionicons name="settings-outline" size={32} color={colors.text} style={styles.titleIcon} />
+          <Text style={styles.title}>Administração</Text>
+        </View>
+        <Text style={styles.subtitle}>Gerencie usuários, permissões e configurações do sistema</Text>
 
-          <View style={styles.header}>
-            <View style={styles.headerRow}>
-              <Ionicons name="settings-outline" size={30} color={adminColors.dark} />
-              <Text style={styles.title}>Administração</Text>
-            </View>
-            <Text style={styles.subtitle}>
-              Gerencie usuários, permissões e configurações do sistema
-            </Text>
+        <View style={styles.toolbar}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search" size={18} color={colors.text} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Pesquisar usuários..."
+              placeholderTextColor={colors.textMuted}
+              value={search}
+              onChangeText={handleSearch}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </View>
-
-          <View style={styles.toolbar}>
-            <View style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}>
-              <Ionicons name="search-outline" size={20} color={adminColors.dark} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Pesquisar usuários..."
-                placeholderTextColor="#2F8A82"
-                value={search}
-                onChangeText={handleSearch}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-
-            <View style={styles.chips}>
-              {FILTROS.map((item) => {
-                const active = filtro === item.key;
-                return (
-                  <Pressable
-                    key={item.key}
-                    onPress={() => handleFiltro(item.key)}
-                    style={[styles.chip, active && styles.chipActive]}
-                  >
-                    <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {item.label} ({counts[item.key]})
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Pressable
-              onPress={onAddUser}
-              onHoverIn={() => setAddHover(true)}
-              onHoverOut={() => setAddHover(false)}
-              style={[styles.addButton, addHover && styles.addButtonHover]}
-              accessibilityRole="button"
-              accessibilityLabel="Adicionar usuário"
-            >
-              <Ionicons name="add" size={26} color={adminColors.white} />
-            </Pressable>
-          </View>
-
-          <View style={styles.table}>
-            <View style={styles.tableHeader}>
-              <View style={styles.colNome}>
-                <Text style={styles.headerText}>Nome</Text>
-              </View>
-              <View style={styles.colEmail}>
-                <Text style={styles.headerText}>Email</Text>
-              </View>
-              <View style={styles.colPerfil}>
-                <Text style={styles.headerText}>Perfil</Text>
-              </View>
-              <View style={styles.colCargo}>
-                <Text style={styles.headerText}>Cargo</Text>
-              </View>
-              <View style={styles.colAcoes} />
-            </View>
-
-            {rows.length === 0 && (
-              <View style={styles.empty}>
-                <Text style={styles.emptyText}>Nenhum usuário encontrado</Text>
+          <Pressable style={styles.filterButton} onPress={openFilter} accessibilityRole="button" accessibilityLabel="Filtrar">
+            <Ionicons name="funnel-outline" size={20} color={colors.text} />
+            {activeFiltersCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
               </View>
             )}
+          </Pressable>
+          <Pressable
+            onPress={onAddUser}
+            accessibilityRole="button"
+            accessibilityLabel="Adicionar usuário"
+            style={({ hovered }) => [styles.addButton, hovered && styles.addButtonHover]}
+          >
+            <Ionicons name="add" size={24} color={colors.onPrimary} />
+          </Pressable>
+        </View>
 
-            {rows.map((usuario, index) => {
-              const isOpen = openMenuId === usuario.id;
-              const openUp = rows.length > 4 && index >= rows.length - 3;
-              return (
-                <Pressable
-                  key={usuario.id}
-                  onHoverIn={() => setHoveredRow(usuario.id)}
-                  onHoverOut={() => setHoveredRow(null)}
-                  style={[
-                    styles.row,
-                    hoveredRow === usuario.id && styles.rowHover,
-                    isOpen && styles.rowOpen,
-                  ]}
-                >
-                  <View style={styles.colNome}>
-                    <View
-                      style={[
-                        styles.statusDot,
-                        usuario.ativo ? styles.dotActive : styles.dotInactive,
-                      ]}
-                    />
-                    <Text style={styles.cellText} numberOfLines={1}>
-                      {usuario.nome}
-                    </Text>
-                  </View>
-                  <View style={styles.colEmail}>
-                    <Text style={styles.cellText} numberOfLines={1}>
-                      {usuario.email}
-                    </Text>
-                  </View>
-                  <View style={styles.colPerfil}>
-                    <Text style={styles.cellText} numberOfLines={1}>
-                      {usuario.perfil}
-                    </Text>
-                  </View>
-                  <View style={styles.colCargo}>
-                    <Text style={styles.cellText} numberOfLines={1}>
-                      {usuario.cargo}
-                    </Text>
-                  </View>
-
-                  <View style={styles.colAcoes}>
-                    <Pressable
-                      onPress={() => setOpenMenuId(isOpen ? null : usuario.id)}
-                      style={[styles.moreButton, isOpen && styles.moreButtonActive]}
-                      accessibilityRole="button"
-                      accessibilityLabel="Ações do usuário"
-                    >
-                      <Ionicons name="ellipsis-vertical" size={20} color={adminColors.dark} />
-                    </Pressable>
-
-                    {isOpen && (
-                      <View style={[styles.menu, openUp ? styles.menuUp : styles.menuDown]}>
-                        <Pressable
-                          onPress={() => handleEdit(usuario)}
-                          onHoverIn={() => setHoveredItem(`edit-${usuario.id}`)}
-                          onHoverOut={() => setHoveredItem(null)}
-                          style={[
-                            styles.menuItem,
-                            hoveredItem === `edit-${usuario.id}` && styles.menuItemHover,
-                          ]}
-                        >
-                          <Ionicons name="create-outline" size={18} color={adminColors.dark} />
-                          <Text style={styles.menuItemText}>Editar usuário</Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleDelete(usuario)}
-                          onHoverIn={() => setHoveredItem(`del-${usuario.id}`)}
-                          onHoverOut={() => setHoveredItem(null)}
-                          style={[
-                            styles.menuItem,
-                            hoveredItem === `del-${usuario.id}` && styles.menuItemHover,
-                          ]}
-                        >
-                          <Ionicons name="trash-outline" size={18} color={adminColors.danger} />
-                          <Text style={[styles.menuItemText, styles.menuItemDangerText]}>
-                            Excluir
-                          </Text>
-                        </Pressable>
-                      </View>
-                    )}
-                  </View>
-                </Pressable>
-              );
-            })}
-
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>
-                Mostrando {rows.length} de {filtered.length} usuários
-              </Text>
-
-              <View style={styles.pagination}>
-                <Pressable
-                  onPress={() => goToPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  style={[styles.pageButton, currentPage === 1 && styles.pageButtonDisabled]}
-                >
-                  <Ionicons name="chevron-back" size={16} color={adminColors.dark} />
-                </Pressable>
-
-                {pageNumbers.map((number) => {
-                  const active = number === currentPage;
-                  return (
-                    <Pressable
-                      key={number}
-                      onPress={() => goToPage(number)}
-                      style={[styles.pageButton, active && styles.pageButtonActive]}
-                    >
-                      <Text style={[styles.pageText, active && styles.pageTextActive]}>
-                        {number}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-
-                <Pressable
-                  onPress={() => goToPage(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  style={[
-                    styles.pageButton,
-                    currentPage === totalPages && styles.pageButtonDisabled,
-                  ]}
-                >
-                  <Ionicons name="chevron-forward" size={16} color={adminColors.dark} />
-                </Pressable>
-              </View>
+        <View style={styles.card}>
+          <View style={styles.tableHeader}>
+            <View style={styles.cellNome}>
+              <Text style={styles.headerText}>Nome</Text>
+            </View>
+            <View style={styles.cellEmail}>
+              <Text style={styles.headerText}>Email</Text>
+            </View>
+            <View style={styles.cellPerfil}>
+              <Text style={styles.headerText}>Perfil</Text>
+            </View>
+            <View style={styles.cellCargo}>
+              <Text style={styles.headerText}>Cargo</Text>
+            </View>
+            <View style={styles.cellAcoes}>
+              <Text style={styles.headerText}>Ações</Text>
             </View>
           </View>
-        </ScrollView>
-      </View>
+
+          {rows.length === 0 ? (
+            <Text style={styles.emptyText}>Nenhum usuário encontrado.</Text>
+          ) : (
+            rows.map((usuario) => <UserRow key={usuario.id} usuario={usuario} onActions={openActions} />)
+          )}
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Mostrando {rows.length} de {filtered.length} usuários</Text>
+            <View style={styles.pagination}>
+              <Pressable
+                onPress={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                style={[styles.pageButton, currentPage === 1 && styles.pageButtonDisabled]}
+                accessibilityLabel="Página anterior"
+              >
+                <Ionicons name="caret-back" size={11} color={colors.text} />
+              </Pressable>
+              {pageNumbers.map((n) => (
+                <Pressable key={n} onPress={() => goToPage(n)} style={[styles.pageButton, n === currentPage && styles.pageButtonActive]}>
+                  <Text style={[styles.pageText, n === currentPage && styles.pageTextActive]}>{n}</Text>
+                </Pressable>
+              ))}
+              <Pressable
+                onPress={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                style={[styles.pageButton, currentPage === totalPages && styles.pageButtonDisabled]}
+                accessibilityLabel="Próxima página"
+              >
+                <Ionicons name="caret-forward" size={11} color={colors.text} />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      <Modal visible={filterOpen} transparent animationType="fade" onRequestClose={() => setFilterOpen(false)}>
+        <Pressable style={styles.filterOverlay} onPress={() => setFilterOpen(false)}>
+          <Pressable style={styles.filterPanel} onPress={() => {}}>
+            <View style={styles.filterHeader}>
+              <Text style={styles.filterTitle}>Filtrar usuários</Text>
+              <Pressable onPress={() => setFilterOpen(false)} accessibilityLabel="Fechar">
+                <Ionicons name="close" size={20} color={colors.text} />
+              </Pressable>
+            </View>
+            <Text style={styles.filterLabel}>Status</Text>
+            <View style={styles.chipsRow}>
+              {STATUS_OPCOES.map((s) => (
+                <FilterChip key={s} label={s} selected={draft.status.includes(s)} onPress={() => toggleDraft('status', s)} />
+              ))}
+            </View>
+            <Text style={styles.filterLabel}>Perfil</Text>
+            <View style={styles.chipsRow}>
+              {perfis.map((p) => (
+                <FilterChip key={p} label={p} selected={draft.perfis.includes(p)} onPress={() => toggleDraft('perfis', p)} />
+              ))}
+            </View>
+            <View style={styles.filterActions}>
+              <Pressable style={styles.filterClear} onPress={clearFilters}>
+                <Text style={styles.filterClearText}>Limpar</Text>
+              </Pressable>
+              <Pressable style={styles.filterApply} onPress={applyFilters}>
+                <Text style={styles.filterApplyText}>Aplicar</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={!!actionMenu} transparent animationType="fade" onRequestClose={closeActions}>
+        <Pressable style={styles.menuOverlay} onPress={closeActions}>
+          {actionMenu && (
+            <View style={[styles.actionMenu, { top: actionMenu.top, left: actionMenu.left }]}>
+              <Pressable onPress={handleEdit} style={({ hovered }) => [styles.actionItem, hovered && styles.rowHover]}>
+                <Ionicons name="create-outline" size={16} color={colors.text} />
+                <Text style={styles.actionText}>Editar usuário</Text>
+              </Pressable>
+              <View style={styles.actionDivider} />
+              <Pressable onPress={handleDelete} style={({ hovered }) => [styles.actionItem, hovered && styles.rowHover]}>
+                <Ionicons name="trash-outline" size={16} color={colors.cta} />
+                <Text style={[styles.actionText, styles.actionTextDanger]}>Excluir</Text>
+              </Pressable>
+            </View>
+          )}
+        </Pressable>
+      </Modal>
     </View>
   );
 }

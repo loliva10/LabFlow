@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { styles, colors } from './LoginStyle';
+import { login } from '../../../services/usuarioService';
+import { mensagemErro } from '../../../services/api';
 
 const fundoImage = require('../../../assets/Login (icones).png');
 const logoImage = require('../../../assets/Logo (branca).png');
@@ -25,6 +27,7 @@ export default function Login({ onLogin, onForgotPassword, onGoogleLogin }) {
   const [remember, setRemember] = useState(false);
   const [focused, setFocused] = useState(null);
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
   function validate() {
     const newErrors = {};
@@ -44,10 +47,22 @@ export default function Login({ onLogin, onForgotPassword, onGoogleLogin }) {
     return Object.keys(newErrors).length === 0;
   }
 
-  function handleLogin() {
+  async function handleLogin() {
+    if (loading) return;
     if (!validate()) return;
-    if (onLogin) {
-      onLogin({ email: email.trim(), password, remember });
+
+    setLoading(true);
+    setErrors({});
+
+    try {
+      const usuario = await login(email.trim(), password);
+      if (onLogin) onLogin(usuario, remember);
+    } catch (erro) {
+      setErrors({
+        password: mensagemErro(erro, 'Email ou senha inválidos.'),
+      });
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -96,6 +111,7 @@ export default function Login({ onLogin, onForgotPassword, onGoogleLogin }) {
             autoCorrect={false}
             autoComplete="email"
             returnKeyType="next"
+            editable={!loading}
           />
           <Text style={[styles.errorText, styles.errorTextEmail]}>
             {errors.email || ' '}
@@ -123,6 +139,7 @@ export default function Login({ onLogin, onForgotPassword, onGoogleLogin }) {
               autoCorrect={false}
               autoComplete="password"
               returnKeyType="done"
+              editable={!loading}
             />
             <Pressable
               style={styles.eyeButton}
@@ -168,13 +185,17 @@ export default function Login({ onLogin, onForgotPassword, onGoogleLogin }) {
           <View style={styles.actions}>
             <Pressable
               onPress={handleLogin}
+              disabled={loading}
               accessibilityRole="button"
               style={({ hovered }) => [
                 styles.primaryButton,
                 hovered && styles.primaryButtonHover,
+                loading && { opacity: 0.6 },
               ]}
             >
-              <Text style={styles.primaryButtonText}>Entrar</Text>
+              <Text style={styles.primaryButtonText}>
+                {loading ? 'Entrando...' : 'Entrar'}
+              </Text>
             </Pressable>
 
             <View style={styles.dividerRow}>

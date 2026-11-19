@@ -8,10 +8,11 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../login/LoginStyle';
-import { styles } from './cadastroUsuarioStyle';
+import { usePreferences, useThemedStyles } from '../../../context/PreferencesContext';
+import { createStyles } from './cadastroUsuarioStyle';
 
-const logo = require('../../../assets/Logo (verde).png');
+const logoVerde = require('../../../assets/Logo (verde).png');
+const logoBranca = require('../../../assets/Logo-branco.png');
 
 const STEPS = [
   'Dados do usuário',
@@ -42,6 +43,7 @@ const PERFIS = [
 ];
 
 function Stepper({ current }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View>
       {STEPS.map((label, index) => {
@@ -73,6 +75,8 @@ function Field({
   error,
   onFocus,
 }) {
+  const { colors } = usePreferences();
+  const styles = useThemedStyles(createStyles);
   const [focused, setFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = !!secureTextEntry;
@@ -88,7 +92,7 @@ function Field({
           !!error && styles.inputError,
         ]}
         placeholder={placeholder}
-        placeholderTextColor="#2F8A82"
+        placeholderTextColor={colors.textMuted}
         value={value}
         onChangeText={onChangeText}
         secureTextEntry={isPassword && !showPassword}
@@ -111,7 +115,7 @@ function Field({
           <Ionicons
             name={showPassword ? 'eye-outline' : 'eye-off-outline'}
             size={20}
-            color={colors.primaryLight}
+            color={colors.accent}
           />
         </Pressable>
       )}
@@ -121,6 +125,7 @@ function Field({
 }
 
 function Select({ placeholder, value, options, onSelect, open, onToggle, error }) {
+  const styles = useThemedStyles(createStyles);
   const [hovered, setHovered] = useState(null);
 
   return (
@@ -167,11 +172,14 @@ function Select({ placeholder, value, options, onSelect, open, onToggle, error }
 }
 
 export default function CadastroUsuario({ usuario, onSubmit, onCancel }) {
+  const styles = useThemedStyles(createStyles);
+  const { isDark } = usePreferences();
+  const logo = isDark ? logoBranca : logoVerde;
   const isEdit = !!usuario;
 
   const [nome, setNome] = useState(usuario ? usuario.nome : '');
   const [email, setEmail] = useState(usuario ? usuario.email : '');
-  const [senha, setSenha] = useState(usuario ? usuario.senha : '');
+  const [senha, setSenha] = useState(usuario ? usuario.senha || '' : '');
   const [cargo, setCargo] = useState(usuario ? usuario.cargo : '');
   const [perfil, setPerfil] = useState(usuario ? usuario.perfil : '');
   const [openSelect, setOpenSelect] = useState(null);

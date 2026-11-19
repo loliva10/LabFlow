@@ -1,7 +1,12 @@
 import { Platform, StyleSheet } from 'react-native';
+import { colors as loginColors } from '../login/LoginStyle';
 
-export const createStyles = (c) =>
-  StyleSheet.create({
+export const createStyles = (c) => {
+  const isDark = c.statusBar === 'light';
+  const bordaCampo = isDark ? c.inputBorder : loginColors.primaryLight;
+  const bordaFoco = isDark ? c.primary : loginColors.primary;
+
+  return StyleSheet.create({
     container: {
       flex: 1,
       flexDirection: 'row',
@@ -11,8 +16,9 @@ export const createStyles = (c) =>
       flex: 1,
     },
     scrollContent: {
-      padding: 32,
-      paddingBottom: 48,
+      paddingHorizontal: 26,
+      paddingTop: 18,
+      paddingBottom: 32,
     },
 
     header: {
@@ -26,17 +32,26 @@ export const createStyles = (c) =>
     titleRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 10,
+      gap: 8,
     },
     title: {
       fontFamily: 'Poppins_400Regular',
-      fontSize: 30,
+      fontSize: 26,
+      lineHeight: 36,
       color: c.text,
     },
     subtitle: {
       fontFamily: 'Poppins_300Light',
       fontSize: 15,
+      lineHeight: 22,
       color: c.text,
+      marginLeft: 6,
+    },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+      flexWrap: 'wrap',
     },
     logoutButton: {
       flexDirection: 'row',
@@ -75,6 +90,12 @@ export const createStyles = (c) =>
       gap: 8,
       marginBottom: 16,
     },
+    cardTitleIcon: {
+      width: 24,
+      height: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     cardTitle: {
       fontFamily: 'Poppins_600SemiBold',
       fontSize: 18,
@@ -91,11 +112,35 @@ export const createStyles = (c) =>
       alignItems: 'center',
       gap: 16,
     },
+    avatarWrapper: {
+      width: 76,
+      height: 76,
+      position: 'relative',
+      ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+    },
     avatar: {
       width: 76,
       height: 76,
       borderRadius: 38,
       backgroundColor: c.avatarBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    avatarImage: {
+      width: 76,
+      height: 76,
+    },
+    avatarBadge: {
+      position: 'absolute',
+      right: -2,
+      bottom: -2,
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: c.accent,
+      borderWidth: 2,
+      borderColor: c.card,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -125,16 +170,24 @@ export const createStyles = (c) =>
       marginBottom: 4,
     },
     input: {
-      fontFamily: 'Poppins_400Regular',
-      fontSize: 14,
+      height: 42,
+      borderWidth: 1,
+      borderColor: bordaCampo,
+      borderRadius: 3,
+      paddingHorizontal: 12,
+      fontFamily: 'Poppins_300Light',
+      fontSize: 15,
       color: c.text,
       backgroundColor: c.inputBg,
-      borderWidth: 1,
-      borderColor: c.inputBorder,
-      borderRadius: 8,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
       ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
+    },
+    inputFocused: {
+      borderColor: bordaFoco,
+      borderWidth: 2,
+      paddingHorizontal: 11,
+    },
+    inputError: {
+      borderColor: c.danger,
     },
     inputDisabled: {
       backgroundColor: c.inputDisabledBg,
@@ -237,4 +290,56 @@ export const createStyles = (c) =>
     messageSuccess: {
       color: c.accent,
     },
+
+    photoOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.3)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    photoMenu: {
+      width: 300,
+      maxWidth: '92%',
+      backgroundColor: c.card,
+      borderWidth: 1,
+      borderColor: c.inputBorder,
+      borderRadius: 12,
+      paddingVertical: 8,
+    },
+    photoMenuHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+    },
+    photoMenuTitle: {
+      fontFamily: 'Poppins_600SemiBold',
+      fontSize: 16,
+      color: c.text,
+    },
+    photoItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: 18,
+      height: 46,
+      ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+    },
+    photoItemHover: {
+      backgroundColor: c.inputDisabledBg,
+    },
+    photoItemText: {
+      fontFamily: 'Poppins_400Regular',
+      fontSize: 14,
+      color: c.text,
+    },
+    photoItemDanger: {
+      color: c.danger,
+    },
+    photoDivider: {
+      height: 1,
+      backgroundColor: c.divider,
+    },
   });
+};
